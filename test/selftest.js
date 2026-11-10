@@ -336,6 +336,11 @@ module.exports = function selfTest(win, { ROOT, app }) {
     /* ---------- 纯文本模式 ---------- */
     await richTests();
 
+    /* ---------- 个性化、在线更新与新功能 ---------- */
+    await themeFontTests();
+    await updateTests();
+    await featureTests();
+
     /* ---------- 偏好设置选项 ---------- */
     await settingsTests();
 
@@ -549,8 +554,13 @@ module.exports = function selfTest(win, { ROOT, app }) {
     await key('Escape');
     check('提示块插件：插入后渲染', await js('[...document.querySelectorAll("blockquote.callout-note")].some(b => b.textContent.includes("通过命令插入"))'));
 
-    // 写作目标：输入计入今日字数，面板统计（先等上一次输入的防抖刷新落定）
-    await wait(500);
+    // 写作目标：输入计入今日字数，面板统计（先等上一次输入的防抖刷新落定：连续两次读数相同）
+    for (let i = 0, prev = null; i < 20; i++) {
+      await wait(300);
+      const cur = await js('document.querySelector("#sb-plugins .status-item").textContent');
+      if (cur === prev) break;
+      prev = cur;
+    }
     const before = await js('parseInt(document.querySelector("#sb-plugins .status-item").textContent.match(/今日 (\\d+)/)[1], 10)');
     await clickJs('[...document.querySelectorAll("#write p")].find(p => p.textContent.startsWith("正文"))');
     await type('新增十个汉字用于测试');
@@ -645,6 +655,250 @@ module.exports = function selfTest(win, { ROOT, app }) {
     check('插件开发指南可在应用内打开', (await text()).startsWith('# Moyu 插件开发指南') && (await js('!!document.querySelector("#write blockquote.callout-warning")')));
   }
   const byIdIn = (list, id) => list.find((p) => p.id === id) || {};
+
+  /** 生成测试图片：kind = light（浅色平坦）/ dark（深色杂乱）/ blue（饱和蓝色渐变） */
+  function makeImage(file, kind) {
+    const W = 96;
+    const buf = Buffer.alloc(W * W * 4);
+    for (let i = 0; i < W * W; i++) {
+      const x = i % W;
+      const y = Math.floor(i / W);
+      let r; let g; let b;
+      if (kind === 'light') { r = g = b = 244; } else if (kind === 'dark') { const n = ((x * 37 + y * 91) % 97) * 1.6; r = g = b = (x + y) % 7 < 3 ? 20 : 20 + n; } else { r = 30 + x; g = 80 + y; b = 230; }
+      buf[i * 4] = b; buf[i * 4 + 1] = g; buf[i * 4 + 2] = r; buf[i * 4 + 3] = 255; // BGRA
+    }
+    fs.writeFileSync(file, nativeImage.createFromBitmap(buf, { width: W, height: W }).toPNG());
+    return file;
+  }
+
+  async function themeFontTests() {
+    const set = async (patch) => { await js(`__zmark.setSetting(${JSON.stringify(patch)})`); await wait(500); };
+    const imp = async (file) => js(`window.zmark.invoke('theme:import', ${JSON.stringify(file)})`);
+    const sample = fs.readFileSync(path.join(ROOT, 'samples', '欢迎使用 Moyu.md'), 'utf8');
+    await js(`__zmark.loadText(${JSON.stringify(sample)}, {filePath: ${JSON.stringify(DOC)}})`);
+    await wait(400);
+
+    // 背景图片：导入后复制到数据目录
+    const light = await imp(makeImage(path.join(OUT, 'bg-light.png'), 'light'));
+    const dark = await imp(makeImage(path.join(OUT, 'bg-dark.png'), 'dark'));
+    const blue = await imp(makeImage(path.join(OUT, 'bg-blue.png'), 'blue'));
+    check('主题：导入图片作为背景（复制到数据目录）', light.type === 'image' && fs.existsSync(light.path) && /backgrounds/.test(light.path), JSON.stringify(light));
+    const overlayOf = () => js('({ has: document.body.classList.contains("has-bg"), op: Number(document.querySelector("#bg-overlay").style.opacity), img: document.querySelector("#bg-image").style.backgroundImage, info: __zmark.state.themeInfo })');
+    await set({ theme: 'github', bgImage: light.path, bgOpacityAuto: true });
+    const oLight = await overlayOf();
+    await set({ bgImage: dark.path });
+    const oDark = await overlayOf();
+    check('主题：设置背景后显示背景层', oLight.has && /bg-light/.test(oLight.img), JSON.stringify(oLight));
+    check('主题：自动透明度——深色杂乱图片的遮罩比浅色平坦图片更浓', oDark.op > oLight.op + 0.2 && oLight.op >= 0.45 && oDark.op <= 0.94, `${oLight.op} / ${oDark.op}`);
+    await set({ theme: 'night' });
+    const oDarkNight = await overlayOf();
+    check('主题：切换到深色主题后自动重新计算（深色图片配深色主题遮罩更淡）', oDarkNight.op < oDark.op, `${oDark.op} → ${oDarkNight.op}`);
+    await set({ theme: 'github', bgOpacityAuto: false, bgOverlay: 0.3 });
+    check('主题：手动遮罩浓度', Math.abs((await overlayOf()).op - 0.3) < 0.01);
+    await set({ bgOpacityAuto: true, bgImage: blue.path, accentColor: 'auto', bgPanels: true, bgBlur: 4 });
+    const ac = await js('({ accent: getComputedStyle(document.body).getPropertyValue("--accent").trim(), sidebar: getComputedStyle(document.querySelector("#sidebar")).backgroundColor, blur: document.querySelector("#bg-image").style.filter })');
+    const rgb = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(ac.accent);
+    check('主题：强调色取自背景图片（蓝色图片 → 蓝色强调色）', rgb && parseInt(rgb[3], 16) > parseInt(rgb[1], 16) + 40, ac.accent);
+    check('主题：侧边栏半透明、背景模糊', /(,|\/)\s*0?\.\d+\)$/.test(ac.sidebar) && ac.blur === 'blur(4px)', JSON.stringify(ac));
+    await set({ accentColor: '#c0392b' });
+    check('主题：自定义强调色（按浅色主题调整对比度）', /^#[0-9a-f]{6}$/i.test(await js('getComputedStyle(document.body).getPropertyValue("--accent").trim()')));
+    await set({ customCss: '.markdown-body h1 { color: rgb(1, 2, 3); }' });
+    check('主题：自定义 CSS', (await js('getComputedStyle(document.querySelector("#write h1")).color')) === 'rgb(1, 2, 3)');
+
+    // 主题包：手工写一个 .moyutheme（含内嵌背景图片）后导入
+    const pkgFile = path.join(OUT, '测试主题.moyutheme');
+    fs.writeFileSync(pkgFile, JSON.stringify({ format: 'moyu-theme', version: 1, name: '测试主题', settings: { theme: 'midnight', accentColor: '#22aa88', bgOverlay: 0.5 }, background: { ext: 'png', data: 'data:image/png;base64,' + fs.readFileSync(path.join(OUT, 'bg-blue.png')).toString('base64') } }));
+    const pkg = await imp(pkgFile);
+    check('主题：导入主题包（含背景图片）', pkg.type === 'package' && pkg.settings.theme === 'midnight' && fs.existsSync(pkg.settings.bgImage), JSON.stringify(pkg).slice(0, 200));
+    await js('__zmark.openPreferences("theme")');
+    await wait(500);
+    await shot('18-主题与背景设置.png');
+    await key('Escape');
+    await set({ theme: 'github', accentColor: 'auto', customCss: '', bgBlur: 0 });
+    await js('document.querySelector("#content").scrollTop = 0');
+    await wait(300);
+    await shot('19-背景图片.png');
+
+    // 字体：导入系统中的字体文件
+    const fontSrc = ['consola.ttf', 'arial.ttf', 'times.ttf'].map((f) => path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts', f)).find((f) => fs.existsSync(f));
+    if (fontSrc) {
+      fs.mkdirSync(path.join(app.getPath('userData'), 'fonts'), { recursive: true });
+      fs.copyFileSync(fontSrc, path.join(app.getPath('userData'), 'fonts', path.basename(fontSrc)));
+      await js('__zmark.refreshFonts()');
+      const fonts = await js('__zmark.state.fonts');
+      const f = fonts[0];
+      check('字体：导入字体文件并读取字体名称', f && /Consolas|Arial|Times/.test(f.name) && f.format === 'truetype', JSON.stringify(f));
+      await set({ fontFamily: 'font:' + f.family, codeFont: 'font:' + f.family });
+      await js(`document.fonts.load('16px "${f.family}"')`);
+      const ff = await js(`({ p: getComputedStyle(document.querySelector('#write p')).fontFamily, code: getComputedStyle(document.querySelector('#write pre code')).fontFamily, ui: getComputedStyle(document.querySelector('#statusbar')).fontFamily, loaded: document.fonts.check('16px "${f.family}"') })`);
+      check('字体：正文与代码使用导入的字体，界面不受影响', ff.p.includes(f.family) && ff.code.includes(f.family) && !ff.ui.includes(f.family) && ff.loaded, JSON.stringify(ff));
+      const html = await js('__zmark.buildExportHtml(false)');
+      check('字体：导出 HTML 内嵌字体', html.includes(`font-family:"${f.family}";src:url("data:font/ttf;base64,`));
+      await js(`window.zmark.invoke('font:remove', ${JSON.stringify(f.file)})`);
+      await set({ fontFamily: 'default', codeFont: 'default' });
+      await js('__zmark.refreshFonts()');
+    }
+    await set({ bgImage: '', accentColor: '' });
+    check('主题：移除背景', !(await js('document.body.classList.contains("has-bg")')));
+  }
+
+  async function updateTests() {
+    const http = require('http');
+    const crypto = require('crypto');
+    const payload = crypto.randomBytes(300 * 1024);
+    const sha = 'sha256:' + crypto.createHash('sha256').update(payload).digest('hex');
+    let mode = 'newer';
+    const server = http.createServer((req, res) => {
+      if (req.url.startsWith('/dl/')) { res.writeHead(200, { 'Content-Length': payload.length }); res.end(payload); return; }
+      if (mode === '404') { res.writeHead(404); res.end('{}'); return; }
+      const tag = mode === 'same' ? 'v1.0.0' : 'v9.9.9';
+      const asset = (name) => ({ name, size: payload.length, browser_download_url: `http://127.0.0.1:${port}/dl/${name}`, digest: mode === 'tampered' ? 'sha256:' + '0'.repeat(64) : sha });
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ tag_name: tag, name: 'Moyu ' + tag, body: '## 新功能\n\n- 测试更新说明', html_url: 'https://github.com/Eterna10/Moyu/releases/tag/' + tag, published_at: '2026-11-10T00:00:00Z',
+        assets: [asset('Moyu-Setup-9.9.9.exe'), asset('Moyu-9.9.9-Portable.exe')] }));
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const port = server.address().port;
+    process.env.MOYU_UPDATE_API = `http://127.0.0.1:${port}`;
+    try {
+      let r = await js("window.zmark.invoke('update:check')");
+      // 便携版应选择 Portable 安装包，安装版与开发模式选择 Setup 安装包
+      const assetName = r.kind === 'portable' ? 'Moyu-9.9.9-Portable.exe' : 'Moyu-Setup-9.9.9.exe';
+      check(`更新：检查到新版本并选择对应安装包（${r.kind}）`, r.ok && r.newer && r.latest === '9.9.9' && r.asset && r.asset.name === assetName, JSON.stringify(r).slice(0, 200));
+      await js('__zmark.runCommand("help.checkUpdate")');
+      await wait(600);
+      check('更新：对话框显示版本与更新说明', await js('!!document.querySelector(".update-modal") && document.querySelector(".update-modal").textContent.includes("9.9.9") && !!document.querySelector(".update-notes h2")'));
+      await js('document.querySelector(".update-modal [data-act=download]").click()');
+      for (let i = 0; i < 50 && !(await js('/校验通过|失败/.test((document.querySelector(".update-progress span")||{}).textContent || "")')); i++) await wait(100);
+      const st = await js('({ msg: document.querySelector(".update-progress span").textContent, btn: document.querySelector(".update-modal [data-act=download]").textContent, bar: document.querySelector(".update-progress i").style.width })');
+      const dl = path.join(app.getPath('temp'), 'moyu-update', assetName);
+      check('更新：下载并通过 SHA-256 校验', /SHA-256 校验通过/.test(st.msg) && fs.existsSync(dl) && fs.statSync(dl).size === payload.length && st.bar === '100%', JSON.stringify(st));
+      await shot('20-检查更新.png');
+      await key('Escape');
+      fs.rmSync(dl, { force: true });
+      mode = 'tampered';
+      r = await js("window.zmark.invoke('update:check')");
+      const err = await js(`window.zmark.invoke('update:download', ${JSON.stringify(r.asset)}).then(() => 'ok', (e) => e.message)`);
+      check('更新：校验值不符时拒绝并删除文件', /校验失败/.test(err) && !fs.existsSync(dl) && !fs.existsSync(dl + '.part'), err);
+      mode = 'same';
+      r = await js("window.zmark.invoke('update:check')");
+      check('更新：已是最新版本', r.ok && !r.newer);
+      mode = '404';
+      r = await js("window.zmark.invoke('update:check')");
+      check('更新：仓库没有发布版本时给出提示', !r.ok && /还没有发布版本/.test(r.error), r.error);
+      mode = 'newer';
+      await js('__zmark.extras.checkUpdate(true)');
+      await wait(300);
+      check('更新：发现新版本时状态栏显示提示按钮', await js('!document.querySelector("#sb-update").hidden && document.querySelector("#sb-update").textContent.includes("9.9.9")'));
+      const bad = await js("window.zmark.invoke('update:download', { name: 'x.exe', size: 1, url: 'http://evil.example.com/x.exe' }).then(() => 'ok', (e) => e.message)");
+      check('更新：拒绝非 HTTPS 的下载地址', /无效的下载地址/.test(bad), bad);
+      await js('document.querySelector("#sb-update").hidden = true');
+    } finally {
+      delete process.env.MOYU_UPDATE_API;
+      server.close();
+    }
+  }
+
+  async function featureTests() {
+    const set = async (patch) => { await js(`__zmark.setSetting(${JSON.stringify(patch)})`); await wait(150); };
+    // 历史版本：首次保存保留磁盘原内容，5 分钟内的多次保存合并
+    const hf = path.join(DOC_DIR, 'history-test.md');
+    fs.writeFileSync(hf, '# 历史测试\n\n原始内容\n');
+    await js(`__zmark.openPath(${JSON.stringify(hf)}, {force: true, skipConfirm: true})`);
+    await wait(300);
+    await js('__zmark.editor.replaceAllText("# 历史测试\\n\\n第二版内容")');
+    await js('__zmark.save(false, true)');
+    await wait(200);
+    let list = await js(`window.zmark.invoke('history:list', ${JSON.stringify(hf)})`);
+    check('历史版本：首次保存时保留原内容与新内容', list.length === 2, JSON.stringify(list));
+    await js('__zmark.editor.replaceAllText("# 历史测试\\n\\n第三版内容\\n\\n新增一段")');
+    await js('__zmark.save(false, true)');
+    await wait(200);
+    list = await js(`window.zmark.invoke('history:list', ${JSON.stringify(hf)})`);
+    check('历史版本：短时间内的连续保存合并为一个快照', list.length === 2 && (await js(`window.zmark.invoke('history:read', ${JSON.stringify(hf)}, ${JSON.stringify(list[0].id)})`)).includes('第三版'), JSON.stringify(list));
+    await js('__zmark.runCommand("file.history")');
+    await wait(500);
+    await js('document.querySelectorAll(".history-item")[1].click()');
+    await wait(300);
+    const hv = await js('({ items: document.querySelectorAll(".history-item").length, add: document.querySelectorAll(".history-diff .dl.add").length, del: document.querySelectorAll(".history-diff .dl.del").length, stat: document.querySelector(".history-stat").textContent })');
+    check('历史版本：列表与逐行对比', hv.items === 2 && hv.add >= 2 && hv.del >= 1, JSON.stringify(hv));
+    await shot('21-历史版本.png');
+    await js('document.querySelector(".history-modal [data-act=restore]").click()');
+    await wait(300);
+    check('历史版本：恢复旧版本（可撤销）', (await text()) === '# 历史测试\n\n原始内容');
+    await js('__zmark.runCommand("edit.undo")');
+    await wait(200);
+    check('历史版本：恢复后可撤销', (await text()).includes('第三版内容'));
+
+    // 快速打开与命令面板
+    await js(`__zmark.loadFolder(${JSON.stringify(DOC_DIR)})`);
+    await wait(300);
+    await js('__zmark.runCommand("file.quickOpen")');
+    await wait(300);
+    await type('histest');
+    await wait(300);
+    const first = await js('(document.querySelector(".palette-item") || {}).textContent || ""');
+    check('快速打开：模糊搜索文件夹中的文件', first.includes('history-test.md'), first);
+    await shot('22-快速打开.png');
+    await js('document.querySelector(".palette-input").value = ""; document.querySelector(".palette-input").dispatchEvent(new Event("input"))');
+    await type('test.md');
+    await wait(300);
+    await key('Enter');
+    await wait(400);
+    check('快速打开：回车打开文件', (await js('__zmark.state.filePath')) === DOC, await js('__zmark.state.filePath'));
+    await js('__zmark.runCommand("edit.commandPalette")');
+    await wait(300);
+    await type('午夜');
+    await wait(200);
+    await key('Enter');
+    await wait(400);
+    check('命令面板：搜索并执行命令', (await js('document.body.dataset.theme')) === 'midnight' && !(await js('!!document.querySelector(".palette-mask")')));
+    await set({ theme: 'github' });
+
+    // 斜杠命令
+    await js('__zmark.editor.appendEmptyBlock()');
+    await type('/');
+    await wait(150);
+    const n0 = await js('document.querySelectorAll(".slash-item").length');
+    await type('table');
+    await wait(150);
+    const firstSlash = await js('(document.querySelector(".slash-item.active") || {}).textContent');
+    await shot('23-斜杠命令.png');
+    await key('Enter');
+    await wait(200);
+    check('斜杠命令：输入 / 弹出菜单并按关键词筛选', n0 >= 14 && firstSlash === '表格', `${n0} ${firstSlash}`);
+    check('斜杠命令：回车插入表格', /^\| 列1 \| 列2 \| 列3 \|/.test(await val()) && !(await js('!!document.querySelector(".slash-menu")')), await val());
+    await key('Escape');
+    await set({ richMode: true });
+    await js('__zmark.editor.appendEmptyBlock()');
+    await type('/h2');
+    await wait(150);
+    await key('Enter');
+    await wait(200);
+    await type('斜杠标题');
+    check('斜杠命令：纯文本模式下插入二级标题', (await val()) === '## 斜杠标题' && (await js('!!__zmark.editor.richEl.querySelector("h2")')), await val());
+    await key('Escape');
+    await js('__zmark.editor.appendEmptyBlock()');
+    await type('/');
+    await key('Escape');
+    await wait(100);
+    check('斜杠命令：Esc 关闭菜单并保留输入', !(await js('!!document.querySelector(".slash-menu")')));
+    await key('Escape');
+    await set({ richMode: false });
+
+    // 图片放大：双击图片
+    await js(`__zmark.loadText(${JSON.stringify('# 图片\n\n![logo](assets/pic.png)')}, {filePath: ${JSON.stringify(DOC)}})`);
+    await wait(400);
+    const r = await js('(() => { const b = document.querySelector("#write img").getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()');
+    await clickAt(r.x, r.y);
+    await wait(60);
+    await clickAt(r.x, r.y);
+    await wait(300);
+    check('图片放大：双击图片打开预览', await js('!!document.querySelector(".lightbox img")'));
+    await key('Escape');
+    check('图片放大：Esc 关闭', !(await js('!!document.querySelector(".lightbox")')));
+    await key('Escape');
+  }
 
   /** 纯文本模式：编辑时不显示源码，源码由编辑区内容还原 */
   async function richTests() {
@@ -914,7 +1168,7 @@ module.exports = function selfTest(win, { ROOT, app }) {
     await js('__zmark.openPreferences("appearance")');
     await wait(300);
     const secs = await js('[...document.querySelectorAll(".prefs-nav [data-sec]")].map(b => b.textContent)');
-    check('偏好设置：7 个分栏', secs.join(',') === '通用,外观,编辑器,Markdown,图像,导出,插件', secs.join(','));
+    check('偏好设置：8 个分栏', secs.join(',') === '通用,外观,主题与背景,编辑器,Markdown,图像,导出,插件', secs.join(','));
     const n = await js('document.querySelectorAll(".prefs [data-k]").length');
     check('偏好设置：设置项数量', n >= 60, n);
     check('偏好设置：关联项默认隐藏（自定义字体）', await js('document.querySelector(".prefs [data-k=customFont]").closest(".row").hidden === true'));

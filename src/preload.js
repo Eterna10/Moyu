@@ -7,10 +7,12 @@ const INVOKE = new Set([
   'fs:read', 'fs:write', 'fs:stat', 'fs:tree', 'fs:newFile', 'fs:exists', 'fs:imageDataUrl',
   'image:insert', 'image:uploadLocal', 'image:testUpload',
   'plugins:list', 'plugins:setEnabled', 'plugins:openDir', 'plugins:dir', 'plugins:storageGet', 'plugins:storageSet', 'plugins:setMenu',
+  'theme:pickBackground', 'theme:bgUrl', 'theme:bgData', 'theme:export', 'theme:import', 'font:list', 'font:import', 'font:remove', 'font:dataUrl',
+  'update:check', 'update:download', 'update:cancel', 'update:install', 'history:list', 'history:read', 'history:snapshot', 'history:clear',
   'app:addRecent', 'app:readAsset', 'app:info', 'app:helpDoc',
   'export:html', 'export:pdf', 'shell:open', 'shell:reveal',
 ]);
-const EVENTS = new Set(['menu', 'open-file', 'before-close', 'settings-changed', 'plugins-changed']);
+const EVENTS = new Set(['menu', 'open-file', 'before-close', 'settings-changed', 'plugins-changed', 'update-progress']);
 
 contextBridge.exposeInMainWorld('zmark', {
   invoke(channel, ...args) {

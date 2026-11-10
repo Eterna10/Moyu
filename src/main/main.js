@@ -6,6 +6,9 @@ const os = require('os');
 const { buildMenu } = require('./menu');
 const images = require('./images');
 const plugins = require('./plugins');
+const appearance = require('./appearance');
+const updater = require('./updater');
+const history = require('./history');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SELF_TEST = process.argv.includes('--self-test');
@@ -86,6 +89,24 @@ const DEFAULTS = {
   pdfHeaderFooter: 'none', // none | page | titlePage
   exportEmbedImages: false,
   openAfterExport: false,
+  // 个性化：背景图片与配色
+  bgImage: '',
+  bgFit: 'cover', // cover | contain | tile
+  bgOpacityAuto: true, // 根据图片亮度与复杂度自动计算遮罩透明度
+  bgOverlay: 0.8, // 手动模式下遮罩的不透明度（越大图片越淡）
+  bgBlur: 0,
+  bgPanels: true, // 侧边栏与状态栏半透明，透出背景
+  accentColor: '', // 空：主题默认；auto：取自背景图片；#rrggbb：自定义
+  customCss: '',
+  codeFont: 'default', // default | mono | font:<家族名> | custom
+  customCodeFont: '',
+  // 更新与历史版本
+  autoCheckUpdate: true,
+  lastUpdateCheck: 0,
+  updateMirror: '',
+  historyEnabled: true,
+  historyMax: 50,
+  slashCommands: true,
   // 图像
   imageFolder: 'assets',
   // 图像（对标 Typora「偏好设置 → 图像」）
@@ -290,6 +311,9 @@ async function htmlToPdf(html, outPath, title) {
 function registerIpc() {
   const h = (ch, fn) => ipcMain.handle(ch, fn);
 
+  appearance.register(h, { getSettings: () => settings });
+  updater.register(h, { root: ROOT, getSettings: () => settings, saveSettings, apiBase: () => (SELF_TEST && process.env.MOYU_UPDATE_API) || 'https://api.github.com' });
+  history.register(h, { getSettings: () => settings });
   plugins.register(h, { root: ROOT, getSettings: () => settings, saveSettings, refreshMenu, windows });
 
   h('settings:get', () => settings);
@@ -491,8 +515,10 @@ if (!SELF_TEST && !app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     loadSettings();
     if (SELF_TEST) {
-      Object.assign(settings, DEFAULTS, { firstRun: false, richMode: false }); // 既有用例针对源码编辑，纯文本模式单独测试
+      // 既有用例针对源码编辑，纯文本模式单独测试；自检不访问真实的 GitHub
+      Object.assign(settings, DEFAULTS, { firstRun: false, richMode: false, autoCheckUpdate: false });
       plugins.resetForTest();
+      for (const d of ['history', 'fonts', 'backgrounds']) fs.rmSync(path.join(app.getPath('userData'), d), { recursive: true, force: true });
     }
     registerIpc();
     refreshMenu();

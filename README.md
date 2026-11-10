@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.5.0-blue.svg" alt="Version"></a>
+  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.6.0-blue.svg" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg" alt="Platform">
   <img src="https://img.shields.io/badge/electron-45.2.1-47848F.svg?logo=electron" alt="Electron">
@@ -25,9 +25,11 @@ Moyu 是一款功能对标 Typora 的桌面 Markdown 编辑器：文档始终以
 
 | 版本 | 文件名 | 说明 |
 | --- | --- | --- |
-| **安装版（推荐）** | `Moyu-Setup-1.5.0.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
-| **便携版** | `Moyu-1.5.0-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
+| **安装版（推荐）** | `Moyu-Setup-1.6.0.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
+| **便携版** | `Moyu-1.6.0-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
 
+> **自动更新**：从 1.6.0 起，Moyu 会在启动时（每天最多一次）检查本仓库的最新发布版本，也可以通过「帮助 → 检查更新」手动检查；下载后会校验 SHA-256，安装版在退出后自动启动安装程序。
+>
 > **提示**：安装包暂未购买商业代码签名证书，首次运行时 Windows SmartScreen 可能提示「未知发布者」，点击「更多信息 → 仍要运行」即可。设置与插件数据保存在 `%APPDATA%\Moyu`，卸载时保留。
 
 ### 2. 源码运行与开发者模式
@@ -66,6 +68,14 @@ npm run dist    # 打包并生成安装版与便携版至 dist/release/
 | :---: | :---: |
 | ![纯文本模式](docs/screenshots/17-纯文本模式.png) | ![偏好设置-外观](docs/screenshots/11-偏好设置-外观.png) |
 
+| 背景图片主题 | 主题与背景设置 |
+| :---: | :---: |
+| ![背景图片](docs/screenshots/19-背景图片.png) | ![主题与背景设置](docs/screenshots/18-主题与背景设置.png) |
+
+| 历史版本对比 | 检查更新 |
+| :---: | :---: |
+| ![历史版本](docs/screenshots/21-历史版本.png) | ![检查更新](docs/screenshots/20-检查更新.png) |
+
 ---
 
 ## 主要功能
@@ -101,13 +111,24 @@ npm run dist    # 打包并生成安装版与便携版至 dist/release/
   - **提示块 Callout**（callout）：支持 GitHub 规范的 `> [!NOTE]`、`> [!TIP]`、`> [!WARNING]` 等美观提示框。
 - 完整文档参见：[插件开发指南](docs/插件开发指南.md)。
 
+### ⚡ 效率工具
+- **快速打开 / 命令面板（Ctrl+P / F1）**：模糊搜索当前文件夹与最近文件；输入 `>` 搜索并执行全部命令（含插件命令）。
+- **斜杠命令**：在空段落中输入 `/`，快速插入标题、列表、表格、代码块、公式、Mermaid 图表、图片、目录、提示块等，支持中英文与拼音关键词筛选。
+- **本地历史版本**：每次保存在本机保留快照（首次保存时还保留原文件内容，5 分钟内的连续保存合并），可逐行对比差异并一键恢复（可撤销）。
+- **图片放大预览**：双击文档中的图片全屏查看，滚轮缩放。
+- **在线更新**：从 GitHub Releases 检查新版本，下载进度显示、SHA-256 校验，安装版退出后自动安装、便携版放到程序旁边；可设置下载加速前缀。
+
 ### 📊 格式支持与导出
 - **丰富语法**：GFM 表格、任务复选框、删除线、自动链接转换、代码高亮（190+ 编程语言）、KaTeX 数学公式渲染、Mermaid 流程图/时序图、脚注、`[TOC]` 自动大纲生成、YAML Front Matter、`==文本高亮==`、嵌入式原生 HTML。
 - **导入与导出**：一键导出为排版优美的高保真 HTML（支持一键内嵌 Base64 图片离线自洽）与 PDF 文档（支持纸张尺寸 A4/A5、横向/纵向、边距与页眉页脚定制）。
 
-### 🎨 偏好设置与个性化
+### 🎨 主题、背景与字体
 - **外观主题**：内置 GitHub、Newsprint（报刊）、Night（夜间）、Midnight（午夜蓝）等精致主题。
-- **全面定制**：支持调整正文字体（可加载系统任意字体）、字体大小、行高、段落间距、版心宽度、首行缩进、标题与公式自动编号等 60+ 细项设置。
+- **背景图片**：导入任意图片作为背景，支持铺满 / 完整显示 / 平铺与模糊；**自动调整透明度**——根据图片亮度与复杂度计算遮罩浓度，保证文字清晰，切换明暗主题时自动重新计算；侧边栏与状态栏可半透明透出背景。
+- **强调色**：跟随主题、取自背景图片的主色，或自定义颜色；自动按主题明暗调整对比度。
+- **主题包与自定义 CSS**：导出 / 导入 `.moyutheme` 主题包（含背景图片、配色、字体与排版设置），可分享给他人；也可直接导入 CSS 文件或在设置中书写自定义 CSS。
+- **自定义字体**：导入 TTF / OTF / TTC / WOFF / WOFF2 字体文件（自动读取字体名称），或从系统已安装字体中选择；正文与代码可分别设置，导出 HTML 时自动内嵌字体。
+- **全面定制**：支持调整字体大小、行高、段落间距、版心宽度、首行缩进、标题与公式自动编号等 60+ 细项设置。
 - **视图模式**：大纲目录与阅读位置同步高亮、文件树导航、专注模式（F8）、打字机模式（F9）。
 
 ---
@@ -116,7 +137,6 @@ npm run dist    # 打包并生成安装版与便携版至 dist/release/
 
 ```
 Moyu/
-├── .github/          GitHub 配置与工作流
 ├── build/            构建图标资源（icon.ico, icon.png, icon-source.webp）
 ├── docs/             项目文档与截图
 │   ├── 插件开发指南.md
@@ -125,7 +145,7 @@ Moyu/
 ├── plugins/          内置示例插件（callout, writing-goal）
 ├── samples/          内置示例示例文档（欢迎文档、语法参考）
 ├── src/
-│   ├── main/         Electron 主进程（窗口管理、菜单、IPC 通信、图片上传、插件机制）
+│   ├── main/         Electron 主进程（窗口管理、菜单、IPC 通信、图片上传、插件机制、主题与字体、在线更新、历史版本）
 │   ├── preload.js    安全桥接脚本（contextBridge 隔离）
 │   └── renderer/     渲染进程（编辑器内核、排版渲染、UI 界面、快捷键）
 ├── test/             端到端自动化测试脚本（selftest.js）

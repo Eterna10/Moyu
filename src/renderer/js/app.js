@@ -31,6 +31,7 @@
   let editor;
   let source;
   let pluginHost;
+  let extras;
 
   /* ======================= 插件宿主所需的基础设施 ======================= */
 
@@ -305,6 +306,8 @@
       } catch (e) { console.warn('[插件] onWillSave 出错', e); }
     }
     if (state.settings.trimTrailingWhitespace) text = trimTrailingWhitespace(text);
+    // 历史版本：写入前保留快照（首次保存时还会保存磁盘上原有的内容）
+    if (state.settings.historyEnabled) await api.invoke('history:snapshot', p, text).catch((e) => console.warn('保存历史版本失败', e));
     if (text !== getText()) setText(text);
     try {
       const r = await api.invoke('fs:write', p, serialize(text));
@@ -466,6 +469,7 @@
     updateTitle();
     refreshDerived();
     autoSave();
+    if (extras) extras.checkSlash();
   }
 
   /* ======================= 文件树 ======================= */
@@ -833,13 +837,53 @@
   const EDITOR_KEYS = ['richMode', 'strongMarker', 'emMarker', 'enterMode', 'autoPair', 'wrapSelection', 'livePreview', 'tabSize', 'insertSpaces', 'listMarker'];
   const pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, obj[k]]));
 
+  const cssFontList = (f) => String(f || '').replace(/[;{}<>]/g, '').trim();
+  /** 导入的字体文件（font:<家族名>）是否仍存在 */
+  const importedFont = (v) => (/^font:/.test(v || '') ? (state.fonts || []).find((f) => f.family === v.slice(5)) : null);
+
   /** 正文字体（空字符串表示使用主题字体） */
   function bodyFont(s) {
     if (s.fontFamily === 'custom') {
-      const f = String(s.customFont || '').replace(/[;{}<>]/g, '').trim();
+      const f = cssFontList(s.customFont);
       return f ? `${f}, ${FONT_STACKS.sans}` : '';
     }
+    const imp = importedFont(s.fontFamily);
+    if (imp) return `"${imp.family}", ${FONT_STACKS.sans}`;
     return FONT_STACKS[s.fontFamily] || '';
+  }
+
+  /** 代码字体（空字符串表示使用主题的等宽字体） */
+  function codeFont(s) {
+    if (s.codeFont === 'custom') {
+      const f = cssFontList(s.customCodeFont);
+      return f ? `${f}, ${FONT_STACKS.mono}` : '';
+    }
+    const imp = importedFont(s.codeFont);
+    return imp ? `"${imp.family}", ${FONT_STACKS.mono}` : '';
+  }
+
+  /** 文档中实际使用到的导入字体（导出时需要一并写入 @font-face） */
+  const usedFonts = (s) => [importedFont(s.fontFamily), importedFont(s.codeFont)].filter(Boolean);
+
+  // 个性化（背景图片、强调色、自定义 CSS）相关的设置项
+  const THEME_KEYS = ['theme', 'bgImage', 'bgFit', 'bgOpacityAuto', 'bgOverlay', 'bgBlur', 'bgPanels', 'accentColor', 'customCss'];
+  let themeSeq = 0;
+  async function applyTheme() {
+    const seq = ++themeSeq;
+    const info = await ZTheme.apply(state.settings, api, DARK.has(state.settings.theme)).catch((e) => { console.warn('应用主题失败', e); return null; });
+    if (seq !== themeSeq || !info) return;
+    state.themeInfo = info;
+    const out = $('.prefs [data-v=bgAuto]');
+    if (out) out.textContent = info.overlay === null ? '—' : `当前 ${Math.round(info.overlay * 100)}%`;
+    const sw = $('.prefs .accent-from-image');
+    if (sw) { sw.style.background = info.imageAccent || 'transparent'; sw.title = info.imageAccent || '未设置背景图片'; }
+  }
+
+  /** 重新读取导入的字体文件并注册 */
+  async function refreshFonts() {
+    state.fonts = await api.invoke('font:list').catch(() => []);
+    ZTheme.registerFonts(state.fonts);
+    applySettings({ fontFamily: state.settings.fontFamily, codeFont: state.settings.codeFont });
   }
 
   function mdOptionsOf(s) {
@@ -857,6 +901,12 @@
       if (!el) { el = document.createElement('style'); el.id = 'user-font'; document.head.appendChild(el); }
       const f = bodyFont(s);
       el.textContent = f ? `.markdown-body { --font-body: ${f}; --font-heading: ${f}; }` : '';
+    }
+    if (has('codeFont') || has('customCodeFont')) {
+      let el = $('#user-code-font');
+      if (!el) { el = document.createElement('style'); el.id = 'user-code-font'; document.head.appendChild(el); }
+      const f = codeFont(s);
+      el.textContent = f ? `.markdown-body, #source { --font-mono: ${f}; }` : '';
     }
     if (has('paragraphSpacing')) root.setProperty('--para-spacing', PARA_SPACING[s.paragraphSpacing] || PARA_SPACING.normal);
     for (const [k, cls] of Object.entries(BODY_CLASSES)) if (has(k)) document.body.classList.toggle(cls, !!s[k]);
@@ -886,9 +936,10 @@
     if (has('typewriter')) { $('#sb-typewriter').classList.toggle('on', s.typewriter); if (editor) editor.setOptions({ typewriter: s.typewriter }); }
     if (editor && has('spellcheck')) { editor.setOptions({ spellcheck: s.spellcheck }); source.ta.spellcheck = !!s.spellcheck; }
     if (has('autoSave') && !all) { updateTitle(); autoSave(); }
+    if (THEME_KEYS.some(has)) applyTheme();
   }
 
-  const PREF_SECTIONS = [['general', '通用'], ['appearance', '外观'], ['editor', '编辑器'], ['markdown', 'Markdown'], ['image', '图像'], ['export', '导出'], ['plugins', '插件']];
+  const PREF_SECTIONS = [['general', '通用'], ['appearance', '外观'], ['theme', '主题与背景'], ['editor', '编辑器'], ['markdown', 'Markdown'], ['image', '图像'], ['export', '导出'], ['plugins', '插件']];
 
   function openPreferences(section) {
     const s = state.settings;
@@ -911,6 +962,7 @@
       ['upload', '上传图片'],
     ];
     const services = [['picgo-app', 'PicGo (app)'], ['picgo-core', 'PicGo-Core (command line)'], ['custom', '自定义命令']];
+    const fontOpts = (state.fonts || []).map((f) => ['font:' + f.family, `导入：${esc(f.name)}`]);
 
     showModal(`
       <div class="prefs-nav">
@@ -933,14 +985,25 @@
           ${row('新建文件的换行符', '打开的已有文件保持其原有换行符', select('defaultEol', [['LF', 'LF（\\n，macOS / Linux）'], ['CRLF', 'CRLF（\\r\\n，Windows）']]))}
           ${row('保存时确保文件以换行结尾', '', check('insertFinalNewline'))}
           ${row('保存时删除行尾多余空格', '保留用于强制换行的两个空格；代码块内不处理', check('trimTrailingWhitespace'))}
+          <h4 class="pref-h">历史版本</h4>
+          ${row('保存时保留历史版本', '每次保存在本机留一份快照（5 分钟内的多次保存合并），可在「文件 → 历史版本」中对比与恢复', check('historyEnabled'))}
+          ${row('每个文件最多保留', '', num('historyMax', [[20, '20 个'], [50, '50 个'], [100, '100 个'], [200, '200 个']]), 'historyEnabled')}
+          <h4 class="pref-h">更新</h4>
+          ${row(`当前版本 ${esc(state.info.version || '')}`, '从 GitHub 发布页获取新版本，下载后校验文件完整性', '<button class="text-btn" data-act="check-update">检查更新</button>')}
+          ${row('启动时自动检查更新', '每天最多检查一次，发现新版本时在状态栏提示', check('autoCheckUpdate'))}
+          ${row('下载加速地址（可选）', '下载缓慢时可填写 GitHub 加速服务的前缀，下载地址会拼接在其后；留空则直接下载', text('updateMirror', '例如 https://example.com/'))}
         </section>
 
         <section data-pane="appearance">
           <h2>外观</h2>
           <h4 class="pref-h">主题与字体</h4>
           ${row('主题', '', select('theme', themes))}
-          ${row('正文字体', '', select('fontFamily', [['default', '跟随主题'], ['sans', '无衬线（微软雅黑）'], ['serif', '衬线（宋体）'], ['kai', '楷体'], ['mono', '等宽'], ['custom', '自定义…']]))}
-          ${row('自定义字体', '填写已安装的字体名称，多个用逗号分隔', text('customFont', '例如 "LXGW WenKai", 霞鹜文楷'), 'fontFamily=custom')}
+          ${row('正文字体', '', select('fontFamily', [['default', '跟随主题'], ['sans', '无衬线（微软雅黑）'], ['serif', '衬线（宋体）'], ['kai', '楷体'], ['mono', '等宽']].concat(fontOpts, [['custom', '系统中的其他字体…']])))}
+          ${row('系统字体名称', '输入已安装的字体名称（可从下拉建议中选择），多个用逗号分隔', text('customFont', '例如 "LXGW WenKai", 霞鹜文楷', 'font-input') + '<datalist id="system-fonts"></datalist>', 'fontFamily=custom')}
+          ${row('代码字体', '代码块、行内代码与源代码模式', select('codeFont', [['default', '跟随主题']].concat(fontOpts, [['custom', '系统中的其他字体…']])))}
+          ${row('代码字体名称', '', text('customCodeFont', '例如 "JetBrains Mono", Consolas', 'font-input'), 'codeFont=custom')}
+          <div class="row font-manage"><label>导入的字体<small>支持 TTF / OTF / TTC / WOFF / WOFF2；导入后出现在上面的字体列表中</small></label><button class="text-btn" data-act="import-font">导入字体文件…</button></div>
+          <div class="font-list"></div>
           ${row('字号', '', range('fontSize', 12, 24, 1, ' px'))}
           ${row('行高', '', range('lineHeight', 1.3, 2.2, 0.05, ''))}
           <h4 class="pref-h">排版</h4>
@@ -954,10 +1017,38 @@
           ${row('侧边栏位置', '', select('sidebarPosition', [['left', '左侧'], ['right', '右侧']]))}
         </section>
 
+        <section data-pane="theme">
+          <h2>主题与背景</h2>
+          <h4 class="pref-h">背景图片</h4>
+          <div class="bg-picker">
+            <div class="bg-thumb"${s.bgImage ? '' : ' data-empty'}><span>未设置背景图片</span></div>
+            <div class="bg-actions">
+              <button class="text-btn" data-act="pick-bg">选择图片…</button>
+              <button class="text-btn" data-act="clear-bg" data-if="bgImage">移除背景</button>
+              <small>图片会复制到 Moyu 的数据目录，原图移动或删除不受影响</small>
+            </div>
+          </div>
+          ${row('填充方式', '', select('bgFit', [['cover', '铺满（裁切）'], ['contain', '完整显示'], ['tile', '平铺']]), 'bgImage')}
+          ${row('自动调整透明度', '根据图片亮度与复杂度计算遮罩浓度，保证文字清晰；切换主题时自动重新计算 · <span data-v="bgAuto">—</span>', check('bgOpacityAuto'), 'bgImage')}
+          ${row('遮罩浓度', '越大图片越淡、文字越清晰', range('bgOverlay', 0, 1, 0.05, ''), 'bgOpacityAuto!=true')}
+          ${row('背景模糊', '', range('bgBlur', 0, 20, 1, ' px'), 'bgImage')}
+          ${row('侧边栏与状态栏半透明', '让背景图片透过界面边栏', check('bgPanels'), 'bgImage')}
+          <h4 class="pref-h">强调色</h4>
+          ${row('强调色', '用于链接、选中项、按钮等；会按主题明暗自动调整以保证对比度', select('accentColor', [['', '跟随主题'], ['auto', '取自背景图片'], ['custom', '自定义…']].map((o) => (o[0] === 'custom' && /^#/.test(s.accentColor) ? [s.accentColor, '自定义…'] : o))) + '<span class="accent-from-image" data-if="accentColor=auto"></span>')}
+          ${row('自定义颜色', '', `<input type="color" data-act="accent-pick" value="${/^#[0-9a-f]{6}$/i.test(s.accentColor) ? s.accentColor : '#0969da'}">`, 'accentColor!=|auto')}
+          <h4 class="pref-h">主题包</h4>
+          <div class="row"><label>导入 / 导出<small>主题包（.moyutheme）包含主题、背景图片、强调色、字体与排版设置、自定义 CSS，可分享给他人；也可直接导入 CSS 文件或图片</small></label>
+            <span class="pref-buttons"><button class="text-btn" data-act="import-theme">导入…</button><button class="text-btn" data-act="export-theme">导出当前主题…</button></span></div>
+          <h4 class="pref-h">自定义 CSS</h4>
+          <p class="pref-note">追加到界面与导出文件中的样式，例如 <code>.markdown-body h1 { color: #c0392b; }</code>。可使用主题变量 --bg、--text、--accent 等。</p>
+          <textarea class="css-editor" data-k="customCss" spellcheck="false" placeholder="/* 在这里书写 CSS */">${esc(s.customCss || '')}</textarea>
+        </section>
+
         <section data-pane="editor">
           <h2>编辑器</h2>
           <h4 class="pref-h">输入</h4>
           ${row('纯文本模式', '编辑时直接在排版结果上修改，不显示 Markdown 源码（公式块、图表、HTML 等代码类内容除外）；可用 F7 切换', check('richMode'))}
+          ${row('斜杠命令', '在空段落中输入 / 弹出菜单，快速插入标题、列表、表格、代码块、图表等', check('slashCommands'))}
           ${row('回车键', '列表、引用、表格、代码块中的智能回车不受影响', select('enterMode', [['paragraph', 'Enter 新段落，Shift+Enter 换行'], ['newline', 'Enter 换行，Shift+Enter 新段落']]))}
           ${row('自动配对括号和引号', '输入 ( [ { " \' ` 以及（【「《“ 时自动补全另一半', check('autoPair'))}
           ${row('选中文字后输入符号自动包裹', '选中文字后输入 * _ ~ = $ ` ( [ " 等，在两侧加上符号', check('wrapSelection'))}
@@ -1093,6 +1184,7 @@
           sync();
         });
       });
+      bindAppearanceControls(el, current, close, sync);
       $('[data-act=reset]', el).onclick = async () => {
         const r = await api.invoke('dialog:message', {
           type: 'question', buttons: ['恢复默认设置', '取消'], defaultId: 1, cancelId: 1,
@@ -1138,6 +1230,113 @@
       show(PREF_SECTIONS.some(([id]) => id === current) ? current : 'general');
       sync();
     });
+  }
+
+  // 主题包中包含的设置项
+  const THEME_PACKAGE_KEYS = ['theme', 'bgImage', 'bgFit', 'bgOpacityAuto', 'bgOverlay', 'bgBlur', 'bgPanels', 'accentColor', 'customCss',
+    'fontFamily', 'customFont', 'codeFont', 'customCodeFont', 'fontSize', 'lineHeight', 'paragraphSpacing', 'contentWidth', 'firstLineIndent', 'headingNumbering'];
+
+  /** 偏好设置中「外观」「主题与背景」「通用 → 更新」的按钮与列表 */
+  function bindAppearanceControls(el, current, close, sync) {
+    const s = state.settings;
+    const reopen = (sec) => { close(); openPreferences(sec); };
+    const errText = (e) => String((e && e.message) || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+
+    // 背景图片缩略图
+    const thumb = $('.bg-thumb', el);
+    const showThumb = async () => {
+      const url = s.bgImage ? await api.invoke('theme:bgUrl', s.bgImage) : null;
+      thumb.style.backgroundImage = url ? `url("${url}")` : '';
+      thumb.toggleAttribute('data-empty', !url);
+    };
+    showThumb();
+    $('[data-act=pick-bg]', el).onclick = async () => {
+      const r = await api.invoke('theme:pickBackground');
+      if (!r) return;
+      setSetting({ bgImage: r.path });
+      await showThumb();
+      sync();
+    };
+    $('[data-act=clear-bg]', el).onclick = async () => { setSetting({ bgImage: '' }); await showThumb(); sync(); };
+    if (state.themeInfo) applyTheme(); // 刷新「当前透明度」与图片配色的显示
+
+    // 强调色：选择「自定义」时使用取色器中的颜色
+    const accentSel = $('[data-k=accentColor]', el);
+    const picker = $('[data-act=accent-pick]', el);
+    const customOpt = () => Array.from(accentSel.options).find((o) => o.textContent === '自定义…');
+    accentSel.addEventListener('change', () => {
+      if (accentSel.value === 'custom' || /^#/.test(accentSel.value)) {
+        customOpt().value = picker.value;
+        accentSel.value = picker.value;
+        setSetting({ accentColor: picker.value });
+        sync();
+      }
+    });
+    picker.addEventListener('input', () => { customOpt().value = picker.value; accentSel.value = picker.value; setSetting({ accentColor: picker.value }); });
+
+    // 主题包
+    $('[data-act=export-theme]', el).onclick = async () => {
+      const name = await promptText('主题名称', '我的主题');
+      if (name === null) return;
+      const p = await api.invoke('theme:export', { name, settings: pick(state.settings, THEME_PACKAGE_KEYS) }).catch((e) => { toast('导出失败：' + errText(e), true); return null; });
+      if (p) toast('已导出主题：' + basename(p));
+    };
+    $('[data-act=import-theme]', el).onclick = async () => {
+      let r;
+      try { r = await api.invoke('theme:import'); } catch (e) { toast('导入失败：' + errText(e), true); return; }
+      if (!r) return;
+      if (r.type === 'image') { setSetting({ bgImage: r.path }); toast('已将图片设为背景'); } else if (r.type === 'css') {
+        setSetting({ customCss: (state.settings.customCss ? state.settings.customCss + '\n\n' : '') + `/* ${r.name} */\n` + r.text });
+        toast('已导入 CSS：' + r.name);
+      } else {
+        const patch = pick(r.settings, THEME_PACKAGE_KEYS.filter((k) => k in r.settings));
+        for (const k of ['fontFamily', 'codeFont']) if (patch[k] && /^font:/.test(patch[k]) && !importedFont(patch[k])) patch[k] = 'default'; // 主题包引用了本机没有的导入字体
+        setSetting(patch);
+        toast('已应用主题：' + r.name);
+      }
+      reopen('theme');
+    };
+
+    // 导入的字体
+    const listBox = $('.font-list', el);
+    const renderFonts = () => {
+      listBox.innerHTML = (state.fonts || []).map((f) => `<div class="font-item"><span class="font-sample" style="font-family:'${esc(f.family)}'">永和九年 Moyu 0123</span>
+        <span class="font-name">${esc(f.name)}<small>${esc(f.file)} · ${(f.size / 1048576).toFixed(1)} MB</small></span><button class="icon-btn" data-remove="${esc(f.file)}" title="删除">✕</button></div>`).join('');
+    };
+    renderFonts();
+    $('[data-act=import-font]', el).onclick = async () => {
+      const r = await api.invoke('font:import').catch((e) => { toast('导入字体失败：' + errText(e), true); return null; });
+      if (!r) return;
+      await refreshFonts();
+      toast(`已导入 ${r.added.length} 个字体`);
+      reopen('appearance');
+    };
+    listBox.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-remove]');
+      if (!b) return;
+      const f = (state.fonts || []).find((x) => x.file === b.dataset.remove);
+      await api.invoke('font:remove', b.dataset.remove);
+      const patch = {};
+      if (f && state.settings.fontFamily === 'font:' + f.family) patch.fontFamily = 'default';
+      if (f && state.settings.codeFont === 'font:' + f.family) patch.codeFont = 'default';
+      if (Object.keys(patch).length) setSetting(patch);
+      await refreshFonts();
+      reopen('appearance');
+    });
+
+    // 系统字体建议（Local Font Access；不可用时仍可手动输入）
+    const fill = async () => {
+      const dl = $('#system-fonts', el);
+      if (!dl || dl.children.length || !window.queryLocalFonts) return;
+      try {
+        const fonts = await window.queryLocalFonts();
+        dl.innerHTML = [...new Set(fonts.map((f) => f.family))].sort((a, b) => a.localeCompare(b, 'zh-CN')).map((f) => `<option value="${esc(f)}">`).join('');
+      } catch (e) { /* 无权限时忽略 */ }
+    };
+    el.querySelectorAll('.font-input').forEach((inp) => { inp.setAttribute('list', 'system-fonts'); inp.addEventListener('focus', fill); });
+
+    $('[data-act=check-update]', el).onclick = () => { close(); runCommand('help.checkUpdate'); };
+    void current;
   }
 
   /** 恢复默认设置（保留使用记录），并立即应用到界面 */
@@ -1200,7 +1399,7 @@
     const rows = [
       ['文件'],
       ['新建 / 新建窗口', 'Ctrl+N / Ctrl+Shift+N'], ['打开 / 打开文件夹', 'Ctrl+O / Ctrl+Shift+O'],
-      ['保存 / 另存为', 'Ctrl+S / Ctrl+Shift+S'], ['导出 PDF', 'Ctrl+Shift+P'], ['偏好设置', 'Ctrl+,'], ['关闭窗口', 'Ctrl+W'],
+      ['保存 / 另存为', 'Ctrl+S / Ctrl+Shift+S'], ['快速打开（输入 > 搜索命令）', 'Ctrl+P'], ['命令面板', 'F1'], ['导出 PDF', 'Ctrl+Shift+P'], ['偏好设置', 'Ctrl+,'], ['关闭窗口', 'Ctrl+W'],
       ['编辑'],
       ['撤销 / 重做', 'Ctrl+Z / Ctrl+Y（或 Ctrl+Shift+Z）'], ['查找 / 替换', 'Ctrl+F / Ctrl+H'], ['查找下一个 / 上一个', 'F3 / Shift+F3'],
       ['粘贴为纯文本', 'Ctrl+Shift+V'],
@@ -1217,7 +1416,7 @@
       ['编辑块内'],
       state.settings.enterMode === 'newline' ? ['段内换行 / 新段落', 'Enter / Shift+Enter'] : ['新段落 / 段内换行', 'Enter / Shift+Enter'],
       ['在块之间移动', '↑ / ↓（位于首行 / 末行时）'], ['列表缩进 / 反缩进', 'Tab / Shift+Tab'], ['表格跳到下一格', 'Tab'],
-      ['在当前块下方新建段落（纯文本模式）', 'Ctrl+Enter'], ['退出编辑块', 'Esc'], ['打开链接', 'Ctrl+单击'],
+      ['在当前块下方新建段落（纯文本模式）', 'Ctrl+Enter'], ['斜杠命令（在空段落中）', '/'], ['退出编辑块', 'Esc'], ['打开链接', 'Ctrl+单击'], ['放大图片', '双击图片'],
     ];
     // 已启用插件提供的带快捷键的命令
     const pluginRows = [...pluginHost.commands.values()].filter((c) => c.accelerator)
@@ -1234,8 +1433,12 @@
       <div>所见即所得的 Markdown 编辑器</div>
       <div style="color:var(--muted);font-size:12px">Electron ${esc(i.electron || '')} · Chromium ${esc(i.chrome || '')} · markdown-it · KaTeX ${esc(katex.version)} · Mermaid · highlight.js</div>
       <div style="color:var(--muted);font-size:12px">插件接口版本 ${window.Moyu.apiVersion} · 已启用插件 ${pluginHost.list().filter((p) => p.active).length} 个 · MIT 开源许可</div>
-      <div class="actions" style="justify-content:center"><button class="text-btn primary" data-act="close">确定</button></div></div>`,
-    (el, close) => { $('[data-act=close]', el).onclick = close; });
+      <div class="actions" style="justify-content:center"><button class="text-btn" data-act="update">检查更新</button><button class="text-btn" data-act="repo">GitHub 仓库</button><button class="text-btn primary" data-act="close">确定</button></div></div>`,
+    (el, close) => {
+      $('[data-act=close]', el).onclick = close;
+      $('[data-act=update]', el).onclick = () => { close(); runCommand('help.checkUpdate'); };
+      $('[data-act=repo]', el).onclick = () => api.invoke('shell:open', 'https://github.com/Eterna10/Moyu');
+    });
   }
 
   /* ======================= 导出 ======================= */
@@ -1281,9 +1484,16 @@
       // 外观设置（字体、段落间距、首行缩进、标题编号等）同样作用于导出结果
       const font = bodyFont(s);
       const vars = [`--font-size:${s.fontSize}px`, `--line-height:${s.lineHeight}`, `--para-spacing:${PARA_SPACING[s.paragraphSpacing] || PARA_SPACING.normal}`, `--tab-size:${s.tabSize || 4}`]
-        .concat(font ? [`--font-body:${font}`, `--font-heading:${font}`] : []).join(';');
+        .concat(font ? [`--font-body:${font}`, `--font-heading:${font}`] : [])
+        .concat(codeFont(s) ? [`--font-mono:${codeFont(s)}`] : []).join(';');
       const bodyClasses = Object.entries(BODY_CLASSES).filter(([k]) => s[k]).map(([, c]) => c).join(' ');
-      const page = `
+      // 导入的字体：PDF 直接引用本地文件；HTML 内嵌（过大的字体保留本地文件引用）
+      const faces = [];
+      for (const f of usedFonts(s)) {
+        const src = forPdf ? f.url : ((await api.invoke('font:dataUrl', f.file).catch(() => null)) || f.url);
+        faces.push(`@font-face{font-family:"${f.family}";src:url("${src}") format("${f.format}");}`);
+      }
+      const page = faces.join('\n') + (s.customCss ? '\n' + s.customCss : '') + `
         html,body{margin:0;background:var(--bg);}
         .markdown-body{max-width:860px;margin:0 auto;padding:48px 56px;${vars};}
         .markdown-body .code-copy{display:none}
@@ -1500,6 +1710,11 @@
     'file.exportPdf': () => exportDoc('pdf'),
     'file.reveal': () => { if (state.filePath) api.invoke('shell:reveal', state.filePath); else toast('文档尚未保存'); },
     'file.preferences': () => openPreferences(),
+    'file.preferencesTheme': () => { closeModals(); openPreferences('theme'); },
+    'file.quickOpen': () => extras.openPalette('file'),
+    'file.history': () => extras.openHistory(),
+    'edit.commandPalette': () => extras.openPalette('cmd'),
+    'help.checkUpdate': () => { closeModals(); return extras.checkUpdate(false); },
     'file.preferencesImage': () => openPreferences('image'),
     'file.close': onBeforeClose,
     // 焦点在查找框等界面输入框中时，撤销 / 重做作用于该输入框而不是文档
@@ -1605,6 +1820,8 @@
     api.on('before-close', onBeforeClose);
     state.settings = await api.invoke('settings:get');
     state.info = await api.invoke('app:info');
+    state.fonts = await api.invoke('font:list').catch(() => []);
+    ZTheme.registerFonts(state.fonts);
     applySettings();
     editor = new BlockEditor($('#write'), $('#content'), {
       md: mdOptionsOf(state.settings),
@@ -1704,6 +1921,15 @@
       onMarkdownChanged: () => { editor.rebuildMd(); refreshDerived(); },
     });
     await pluginHost.load();
+
+    extras = ZExtras.init({
+      api, state, toast, showModal, runCommand, openPath, setText, getText, docName, renderMarkdown,
+      editor: () => editor,
+      focusEditor: () => { if (state.sourceMode) source.focus(); else editor.focusEditor(); },
+      pluginCommands: () => [...pluginHost.commands.values()].map((c) => Object.assign({}, c, { pluginName: (pluginHost.records.get(c.pluginId) || { manifest: {} }).manifest.name || c.pluginId })),
+    });
+    editor.editorEl.addEventListener('keydown', (e) => extras.slashKeydown(e), true);
+    $('#sb-update').onclick = () => extras.showUpdate(extras.lastUpdate());
     api.on('plugins-changed', () => pluginHost.reload().then(refreshPluginPane));
 
     const initial = await api.invoke('win:initial');
@@ -1717,7 +1943,11 @@
     if (state.settings.lastFolder) loadFolder(state.settings.lastFolder); else renderTree(null);
 
     // 供自检脚本使用
-    window.__zmark = { editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, exportDoc, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
+    // 启动后自动检查更新（每天最多一次）
+    if (!state.selfTest && state.settings.autoCheckUpdate && Date.now() - (state.settings.lastUpdateCheck || 0) > 20 * 3600 * 1000) {
+      setTimeout(() => extras.checkUpdate(true), 6000);
+    }
+    window.__zmark = { extras, refreshFonts, editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, exportDoc, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
     document.body.dataset.ready = '1';
   }
 
