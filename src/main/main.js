@@ -362,7 +362,6 @@ function registerIpc() {
     const win = focusedWin(e);
     if (win) { win.forceClose = true; win.close(); }
   });
-  h('win:new', (e, filePath) => { createWindow(filePath); });
 
   h('dialog:open', async (e) => {
     const r = await dialog.showOpenDialog(focusedWin(e), {

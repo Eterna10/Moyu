@@ -271,5 +271,5 @@
     return false;
   }
 
-  window.ZHL = { HLTextarea, highlightMarkdown, autoPairKeydown, autoPairInput };
+  window.ZHL = { HLTextarea, autoPairKeydown, autoPairInput };
 })();

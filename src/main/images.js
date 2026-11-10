@@ -261,4 +261,4 @@ async function testUpload(s, iconPath) {
   }
 }
 
-module.exports = { insertImages, uploadLocal, testUpload, resolveAction, formatSrc };
+module.exports = { insertImages, uploadLocal, testUpload };

@@ -185,4 +185,4 @@ function register(h, ctx) {
   void ctx;
 }
 
-module.exports = { register, fontFamilyName, listFonts, bgDir, fontDir };
+module.exports = { register };

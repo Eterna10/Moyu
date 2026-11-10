@@ -464,5 +464,5 @@
     while (pendingRenders.size) await Promise.all([...pendingRenders]);
   }
 
-  window.ZMD = { registry, createMd, sanitize, postProcess, whenRendered, setMermaidTheme, escapeHtml, slugify, resolveSrc, toFileUrl, isExternal };
+  window.ZMD = { registry, createMd, sanitize, postProcess, whenRendered, setMermaidTheme, escapeHtml, toFileUrl, isExternal };
 })();

@@ -65,4 +65,4 @@ function register(h, ctx) {
   h('history:clear', (e, docPath) => { fs.rmSync(dirFor(docPath), { recursive: true, force: true }); return true; });
 }
 
-module.exports = { register, snapshot, list, MERGE_WINDOW };
+module.exports = { register };

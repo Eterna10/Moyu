@@ -156,4 +156,4 @@ function register(h, ctx) {
   });
 }
 
-module.exports = { register, compareVersions, runKind };
+module.exports = { register };

@@ -604,5 +604,4 @@
     this.editorEl.classList.toggle('rich', !!this.rich);
   };
 
-  window.ZRich = { htmlToMd };
 })();

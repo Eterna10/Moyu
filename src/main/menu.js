@@ -197,4 +197,4 @@ function buildMenu({ settings, send, newWindow, openRecent, clearRecent, plugins
   return Menu.buildFromTemplate(template);
 }
 
-module.exports = { buildMenu, THEMES };
+module.exports = { buildMenu };

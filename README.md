@@ -76,6 +76,10 @@ npm run dist    # 打包并生成安装版与便携版至 dist/release/
 | :---: | :---: |
 | ![历史版本](docs/screenshots/21-历史版本.png) | ![检查更新](docs/screenshots/20-检查更新.png) |
 
+| 示例插件（写作目标 · 提示块） | 一键提示词 |
+| :---: | :---: |
+| ![插件示例](docs/screenshots/09-插件示例.png) | ![一键提示词](docs/screenshots/24-一键提示词.png) |
+
 ---
 
 ## 主要功能
@@ -145,7 +149,7 @@ Moyu/
 │   ├── 设计文档.md
 │   └── screenshots/  界面预览截图
 ├── plugins/          内置示例插件（callout, writing-goal）
-├── samples/          内置示例示例文档（欢迎文档、语法参考）
+├── samples/          内置示例文档（欢迎文档、语法参考）
 ├── src/
 │   ├── main/         Electron 主进程（窗口管理、菜单、IPC 通信、图片上传、插件机制、主题与字体、在线更新、历史版本）
 │   ├── preload.js    安全桥接脚本（contextBridge 隔离）

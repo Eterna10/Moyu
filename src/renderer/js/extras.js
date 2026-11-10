@@ -433,5 +433,5 @@
     };
   }
 
-  window.ZExtras = { init, COMMANDS, fuzzy };
+  window.ZExtras = { init, COMMANDS };
 })();

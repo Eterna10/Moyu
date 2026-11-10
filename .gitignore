@@ -1,29 +1,18 @@
 # Dependencies
 node_modules/
 
-# Production builds & packaged binaries
+# Build output (pack staging, unpacked app, installers)
 dist/
-Moyu/
 *.exe
-*.dll
-*.pak
-*.bin
-*.dat
 
-# Temporary staging directory
-.stage/
-
-# Test output
+# Self-test output
 test-output/
 
 # Logs
-logs
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# OS and Editor files
+# OS and editor files
 .DS_Store
 Thumbs.db
 Desktop.ini

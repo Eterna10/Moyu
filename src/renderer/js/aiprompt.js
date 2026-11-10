@@ -166,5 +166,5 @@ Moyu.definePlugin({
 `;
   }
 
-  window.ZAIPrompt = { build, PLACEHOLDER };
+  window.ZAIPrompt = { build };
 })();

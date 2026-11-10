@@ -93,7 +93,6 @@ function register(h, ctx) {
     return true;
   });
   h('plugins:openDir', () => shell.openPath(ensureUserDir()));
-  h('plugins:dir', () => ensureUserDir());
   h('plugins:storageGet', (e, id) => {
     try { return JSON.parse(fs.readFileSync(storageFile(id), 'utf8')); } catch (err) { return {}; }
   });
@@ -122,4 +121,4 @@ function resetForTest() {
   for (const d of [userPluginDir(), dataDir()]) fs.rmSync(d, { recursive: true, force: true });
 }
 
-module.exports = { register, scan, ensureUserDir, userPluginDir, resetForTest, menuItems: () => menuItems };
+module.exports = { register, ensureUserDir, resetForTest, menuItems: () => menuItems };

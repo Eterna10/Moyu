@@ -167,5 +167,5 @@
       .map((f) => `@font-face { font-family: "${f.family}"; src: url("${f.url}") format("${f.format}"); font-display: swap; }`).join('\n');
   }
 
-  window.ZTheme = { apply, analyze, autoOverlay, fitAccent, registerFonts, current: () => current, toHex, fromHex };
+  window.ZTheme = { apply, registerFonts };
 })();
