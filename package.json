@@ -1,0 +1,85 @@
+{
+  "name": "moyu",
+  "productName": "Moyu",
+  "version": "1.5.0",
+  "description": "Moyu - 一款所见即所得的 Markdown 编辑器",
+  "main": "src/main/main.js",
+  "author": "ZRID",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Eterna10/Moyu.git"
+  },
+  "homepage": "https://github.com/Eterna10/Moyu#readme",
+  "bugs": {
+    "url": "https://github.com/Eterna10/Moyu/issues"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "electron . --self-test",
+    "pack": "node tools/pack.js",
+    "dist": "node tools/pack.js && electron-builder --win nsis portable --prepackaged dist/Moyu-win32-x64"
+  },
+  "build": {
+    "appId": "com.zrid.zmark",
+    "productName": "Moyu",
+    "copyright": "Copyright © 2026 ZRID",
+    "directories": {
+      "output": "dist/release",
+      "buildResources": "build"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Moyu",
+      "installerLanguages": [
+        "zh_CN"
+      ],
+      "language": "2052",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Moyu ${version}",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Moyu-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "Moyu-${version}-Portable.exe"
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown"
+        ],
+        "name": "Markdown",
+        "description": "Markdown 文档",
+        "icon": "icon",
+        "role": "Editor"
+      }
+    ]
+  },
+  "dependencies": {
+    "@highlightjs/cdn-assets": "^11.12.0",
+    "dompurify": "^3.4.17",
+    "katex": "^0.19.1",
+    "markdown-it": "^15.0.3",
+    "markdown-it-footnote": "^4.0.0",
+    "mermaid": "^12.2.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  }
+}

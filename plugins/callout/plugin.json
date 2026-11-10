@@ -1,0 +1,9 @@
+{
+  "id": "callout",
+  "name": "提示块 Callout",
+  "version": "1.0.0",
+  "description": "支持 GitHub 风格的提示块语法：> [!NOTE]、> [!TIP]、> [!IMPORTANT]、> [!WARNING]、> [!CAUTION]，可自定义标题，并提供插入命令。导出 HTML / PDF 时样式一并保留。",
+  "author": "ZRID",
+  "main": "main.js",
+  "apiVersion": 1
+}

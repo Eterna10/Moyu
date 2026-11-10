@@ -1,0 +1,9 @@
+{
+  "id": "writing-goal",
+  "name": "写作目标",
+  "version": "1.0.0",
+  "description": "设定每日写作字数目标：状态栏实时显示今日进度，侧边栏「统计」面板展示目标完成度、本次写作时长与速度、文档结构统计和最近 7 天的写作记录。",
+  "author": "ZRID",
+  "main": "main.js",
+  "apiVersion": 1
+}

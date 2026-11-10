@@ -1,0 +1,141 @@
+/* Moyu 主题：所有颜色通过 CSS 变量定义 */
+:root,
+body[data-theme="github"] {
+  --bg: #ffffff;
+  --bg-soft: #f6f8fa;
+  --text: #24292f;
+  --text-soft: #57606a;
+  --muted: #8c959f;
+  --border: #d0d7de;
+  --accent: #0969da;
+  --accent-soft: rgba(9, 105, 218, 0.12);
+  --heading: #1f2328;
+  --code-bg: #f6f8fa;
+  --inline-code-bg: rgba(175, 184, 193, 0.2);
+  --inline-code: #cf222e;
+  --quote: #57606a;
+  --quote-border: #d0d7de;
+  --table-head: #f6f8fa;
+  --mark-bg: #fff8c5;
+  --sidebar-bg: #f7f7f8;
+  --sidebar-text: #3d444d;
+  --sidebar-active: rgba(9, 105, 218, 0.1);
+  --status-bg: #f7f7f8;
+  --edit-bg: rgba(9, 105, 218, 0.04);
+  --edit-border: rgba(9, 105, 218, 0.35);
+  --hl-mark: #a0a8b1;
+  --hl-heading: #0550ae;
+  --hl-code: #953800;
+  --hl-link: #0969da;
+  --hl-math: #8250df;
+  --sel: rgba(9, 105, 218, 0.22);
+  --find: rgba(255, 196, 0, 0.55);
+  --shadow: 0 8px 28px rgba(31, 35, 40, 0.15);
+  --font-body: -apple-system, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  --font-heading: var(--font-body);
+  --font-mono: "Cascadia Code", Consolas, "JetBrains Mono", "Sarasa Mono SC", "Microsoft YaHei Mono", monospace;
+  color-scheme: light;
+}
+
+body[data-theme="newsprint"] {
+  --bg: #f3f2ee;
+  --bg-soft: #ebe9e2;
+  --text: #333333;
+  --text-soft: #555555;
+  --muted: #999488;
+  --border: #d6d1c4;
+  --accent: #0b6e99;
+  --accent-soft: rgba(11, 110, 153, 0.12);
+  --heading: #222222;
+  --code-bg: #eae7df;
+  --inline-code-bg: rgba(160, 150, 120, 0.18);
+  --inline-code: #a33b2b;
+  --quote: #666052;
+  --quote-border: #c9c2ae;
+  --table-head: #e8e4d9;
+  --mark-bg: #f2e3a0;
+  --sidebar-bg: #ebe9e2;
+  --sidebar-text: #44413a;
+  --sidebar-active: rgba(11, 110, 153, 0.12);
+  --status-bg: #ebe9e2;
+  --edit-bg: rgba(120, 100, 60, 0.05);
+  --edit-border: rgba(11, 110, 153, 0.35);
+  --hl-mark: #b0a990;
+  --hl-heading: #0b6e99;
+  --hl-code: #a33b2b;
+  --hl-link: #0b6e99;
+  --hl-math: #7b4fa0;
+  --sel: rgba(11, 110, 153, 0.2);
+  --font-body: "Palatino Linotype", Georgia, "Songti SC", "SimSun", "宋体", serif;
+  --font-heading: "Palatino Linotype", Georgia, "STZhongsong", "SimSun", serif;
+  color-scheme: light;
+}
+
+body[data-theme="night"] {
+  --bg: #1f2124;
+  --bg-soft: #26292d;
+  --text: #d4d7dc;
+  --text-soft: #a8adb5;
+  --muted: #6e747d;
+  --border: #3a3e44;
+  --accent: #6cb6ff;
+  --accent-soft: rgba(108, 182, 255, 0.14);
+  --heading: #eef0f3;
+  --code-bg: #2a2d32;
+  --inline-code-bg: rgba(110, 118, 129, 0.3);
+  --inline-code: #ff9b8a;
+  --quote: #9aa1aa;
+  --quote-border: #4a4f57;
+  --table-head: #2a2d32;
+  --mark-bg: #6b5a1a;
+  --sidebar-bg: #191b1e;
+  --sidebar-text: #b8bdc4;
+  --sidebar-active: rgba(108, 182, 255, 0.14);
+  --status-bg: #191b1e;
+  --edit-bg: rgba(108, 182, 255, 0.05);
+  --edit-border: rgba(108, 182, 255, 0.35);
+  --hl-mark: #646a73;
+  --hl-heading: #8ec5ff;
+  --hl-code: #ffb17a;
+  --hl-link: #6cb6ff;
+  --hl-math: #d2a8ff;
+  --sel: rgba(108, 182, 255, 0.28);
+  --find: rgba(255, 196, 0, 0.4);
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+body[data-theme="midnight"] {
+  --bg: #12192b;
+  --bg-soft: #1a2338;
+  --text: #c9d1e4;
+  --text-soft: #9aa6c0;
+  --muted: #5f6b86;
+  --border: #2b3753;
+  --accent: #7aa2f7;
+  --accent-soft: rgba(122, 162, 247, 0.15);
+  --heading: #e2e8f8;
+  --code-bg: #182036;
+  --inline-code-bg: rgba(122, 162, 247, 0.14);
+  --inline-code: #f7768e;
+  --quote: #8b98b8;
+  --quote-border: #3d4a6b;
+  --table-head: #1a2338;
+  --mark-bg: #5c4b14;
+  --sidebar-bg: #0e1424;
+  --sidebar-text: #a9b3cc;
+  --sidebar-active: rgba(122, 162, 247, 0.16);
+  --status-bg: #0e1424;
+  --edit-bg: rgba(122, 162, 247, 0.05);
+  --edit-border: rgba(122, 162, 247, 0.4);
+  --hl-mark: #56607a;
+  --hl-heading: #7aa2f7;
+  --hl-code: #e0af68;
+  --hl-link: #7dcfff;
+  --hl-math: #bb9af7;
+  --sel: rgba(122, 162, 247, 0.28);
+  --find: rgba(224, 175, 104, 0.45);
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --font-heading: Georgia, "Segoe UI", "Microsoft YaHei UI", serif;
+  color-scheme: dark;
+}

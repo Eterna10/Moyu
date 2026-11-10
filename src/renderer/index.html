@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' file:; style-src 'self' 'unsafe-inline'; img-src * file: data: blob:; font-src 'self' data: file:; media-src * file: data: blob:; connect-src 'self'">
+  <title>Moyu</title>
+  <link rel="stylesheet" href="../../node_modules/katex/dist/katex.min.css">
+  <link rel="stylesheet" id="hljs-light" href="../../node_modules/@highlightjs/cdn-assets/styles/github.min.css">
+  <link rel="stylesheet" id="hljs-dark" href="../../node_modules/@highlightjs/cdn-assets/styles/github-dark.min.css" disabled>
+  <link rel="stylesheet" href="css/themes.css">
+  <link rel="stylesheet" href="css/markdown.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-theme="github">
+  <div id="app">
+    <div id="main">
+      <aside id="sidebar">
+        <div class="side-tabs">
+          <button class="side-tab" data-tab="files" title="文件 (Ctrl+Shift+3)">文件</button>
+          <button class="side-tab" data-tab="outline" title="大纲 (Ctrl+Shift+1)">大纲</button>
+        </div>
+        <div class="side-panel" id="panel-files">
+          <div class="folder-head">
+            <span id="folder-name" class="folder-name">未打开文件夹</span>
+            <span class="folder-actions">
+              <button class="icon-btn" id="btn-new-file" title="新建文件">＋</button>
+              <button class="icon-btn" id="btn-refresh" title="刷新">⟳</button>
+              <button class="icon-btn" id="btn-open-folder" title="打开文件夹">📂</button>
+            </span>
+          </div>
+          <div id="file-tree" class="file-tree"></div>
+        </div>
+        <div class="side-panel" id="panel-outline">
+          <div id="outline" class="outline"></div>
+        </div>
+      </aside>
+      <div id="resizer" title="拖动调整侧边栏宽度"></div>
+      <section id="content-wrap">
+        <div id="content" class="scroller">
+          <article id="write" class="markdown-body" spellcheck="false"></article>
+        </div>
+        <div id="source" class="scroller" hidden></div>
+
+        <div id="findbar" hidden>
+          <div class="find-row">
+            <input id="find-input" type="text" placeholder="查找" spellcheck="false">
+            <span id="find-count" class="find-count"></span>
+            <button class="find-opt" id="find-case" title="区分大小写">Aa</button>
+            <button class="find-opt" id="find-regex" title="正则表达式">.*</button>
+            <button class="icon-btn" id="find-prev" title="上一个 (Shift+Enter)">↑</button>
+            <button class="icon-btn" id="find-next" title="下一个 (Enter)">↓</button>
+            <button class="icon-btn" id="find-toggle-replace" title="替换 (Ctrl+H)">⇄</button>
+            <button class="icon-btn" id="find-close" title="关闭 (Esc)">✕</button>
+          </div>
+          <div class="find-row" id="replace-row" hidden>
+            <input id="replace-input" type="text" placeholder="替换为" spellcheck="false">
+            <button class="text-btn" id="replace-one">替换</button>
+            <button class="text-btn" id="replace-all">全部替换</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <footer id="statusbar">
+      <div class="status-left">
+        <button class="status-btn" id="sb-sidebar" title="侧边栏 (Ctrl+Shift+L)">☰</button>
+        <button class="status-btn" id="sb-source" title="源代码模式 (Ctrl+/)">&lt;/&gt;</button>
+        <button class="status-btn" id="sb-rich" title="纯文本模式：编辑时不显示 Markdown 源码 (F7)">纯文本</button>
+        <button class="status-btn" id="sb-focus" title="专注模式 (F8)">专注</button>
+        <button class="status-btn" id="sb-typewriter" title="打字机模式 (F9)">打字机</button>
+      </div>
+      <div class="status-right">
+        <span id="sb-plugins" class="sb-plugins"></span>
+        <span id="sb-selection"></span>
+        <span id="sb-count">字数 0</span>
+        <span id="sb-save" class="save-state">未保存</span>
+      </div>
+    </footer>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="../../node_modules/markdown-it/dist/browser/markdown-it.umd.min.js"></script>
+  <script src="../../node_modules/markdown-it-footnote/dist/markdown-it-footnote.min.js"></script>
+  <script src="../../node_modules/katex/dist/katex.min.js"></script>
+  <script src="../../node_modules/@highlightjs/cdn-assets/highlight.min.js"></script>
+  <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="../../node_modules/mermaid/dist/mermaid.min.js"></script>
+  <script src="js/md.js"></script>
+  <script src="js/hltextarea.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/richmode.js"></script>
+  <script src="js/plugins.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
