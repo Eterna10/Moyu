@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.6.0-blue.svg" alt="Version"></a>
+  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.6.1-blue.svg" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg" alt="Platform">
   <img src="https://img.shields.io/badge/electron-45.2.1-47848F.svg?logo=electron" alt="Electron">
@@ -25,8 +25,8 @@ Moyu 是一款功能对标 Typora 的桌面 Markdown 编辑器：文档始终以
 
 | 版本 | 文件名 | 说明 |
 | --- | --- | --- |
-| **安装版（推荐）** | `Moyu-Setup-1.6.0.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
-| **便携版** | `Moyu-1.6.0-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
+| **安装版（推荐）** | `Moyu-Setup-1.6.1.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
+| **便携版** | `Moyu-1.6.1-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
 
 > **自动更新**：从 1.6.0 起，Moyu 会在启动时（每天最多一次）检查本仓库的最新发布版本，也可以通过「帮助 → 检查更新」手动检查；下载后会校验 SHA-256，安装版在退出后自动启动安装程序。
 >
@@ -109,6 +109,7 @@ npm run dist    # 打包并生成安装版与便携版至 dist/release/
 - **内置示例插件**：
   - **写作目标**（writing-goal）：每日字数目标规划、状态栏动态进度条、统计图表面板、历史打卡统计。
   - **提示块 Callout**（callout）：支持 GitHub 规范的 `> [!NOTE]`、`> [!TIP]`、`> [!WARNING]` 等美观提示框。
+- **✨ 一键提示词**：在「偏好设置 → 插件」中描述想要的功能，即可生成一段完整、严谨的提示词（包含运行环境、全部接口、约束与输出要求），交给任意 AI 工具就能快速写出对应的插件。
 - 完整文档参见：[插件开发指南](docs/插件开发指南.md)。
 
 ### ⚡ 效率工具
@@ -130,6 +131,7 @@ npm run dist    # 打包并生成安装版与便携版至 dist/release/
 - **自定义字体**：导入 TTF / OTF / TTC / WOFF / WOFF2 字体文件（自动读取字体名称），或从系统已安装字体中选择；正文与代码可分别设置，导出 HTML 时自动内嵌字体。
 - **全面定制**：支持调整字体大小、行高、段落间距、版心宽度、首行缩进、标题与公式自动编号等 60+ 细项设置。
 - **视图模式**：大纲目录与阅读位置同步高亮、文件树导航、专注模式（F8）、打字机模式（F9）。
+- **开启动画**：启动时显示 Moyu 图标的开启动画（跟随当前主题配色，约 1 秒，不影响加载），可在「偏好设置 → 通用」中关闭。
 
 ---
 

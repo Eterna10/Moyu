@@ -5,6 +5,8 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self' file:; style-src 'self' 'unsafe-inline'; img-src * file: data: blob:; font-src 'self' data: file:; media-src * file: data: blob:; connect-src 'self'">
   <title>Moyu</title>
+  <script src="js/splash.js"></script>
+  <link rel="stylesheet" href="css/splash.css">
   <link rel="stylesheet" href="../../node_modules/katex/dist/katex.min.css">
   <link rel="stylesheet" id="hljs-light" href="../../node_modules/@highlightjs/cdn-assets/styles/github.min.css">
   <link rel="stylesheet" id="hljs-dark" href="../../node_modules/@highlightjs/cdn-assets/styles/github-dark.min.css" disabled>
@@ -13,6 +15,18 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body data-theme="github">
+  <div id="splash" aria-hidden="true">
+    <div class="splash-glow"></div>
+    <div class="splash-inner">
+      <div class="splash-logo-wrap">
+        <img class="splash-logo" src="../../build/icon.png" alt="" draggable="false">
+        <span class="splash-spark s1">✦</span><span class="splash-spark s2">✦</span><span class="splash-spark s3">✧</span>
+      </div>
+      <div class="splash-name">Moyu</div>
+      <div class="splash-sub">所见即所得的 Markdown 编辑器</div>
+      <div class="splash-bar"><i></i></div>
+    </div>
+  </div>
   <div id="app">
     <div id="main">
       <aside id="sidebar">
@@ -95,6 +109,7 @@
   <script src="js/plugins.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/extras.js"></script>
+  <script src="js/aiprompt.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

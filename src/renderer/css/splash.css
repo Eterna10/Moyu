@@ -1,0 +1,81 @@
+/* Moyu 开启动画：图标弹入、星光闪烁、名称渐显，编辑器就绪后淡出 */
+#splash { display: none; }
+.splash-on #splash {
+  --splash-fg: #2d2f6b;
+  --splash-sub: #6b6f9a;
+  --splash-accent: #6c63ff;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--splash-bg, #ffffff);
+  pointer-events: none; /* 动画期间不阻挡操作 */
+  overflow: hidden;
+  transition: opacity 0.45s ease, visibility 0.45s;
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+}
+.splash-dark #splash { --splash-fg: #e4e6ff; --splash-sub: #9aa0c8; --splash-accent: #8f88ff; }
+#splash.splash-leave { opacity: 0; visibility: hidden; }
+
+.splash-glow {
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124, 116, 255, 0.22) 0%, rgba(124, 116, 255, 0.08) 40%, transparent 70%);
+  animation: splash-glow 1.6s ease-out both;
+}
+.splash-inner { position: relative; display: flex; flex-direction: column; align-items: center; }
+.splash-logo-wrap { position: relative; width: 132px; height: 132px; }
+.splash-logo {
+  width: 132px;
+  height: 132px;
+  display: block;
+  user-select: none;
+  filter: drop-shadow(0 10px 24px rgba(70, 60, 180, 0.28));
+  animation: splash-pop 0.75s cubic-bezier(0.2, 1.4, 0.4, 1) both, splash-float 2.4s ease-in-out 0.75s infinite;
+}
+.splash-spark { position: absolute; color: var(--splash-accent); opacity: 0; animation: splash-twinkle 1.2s ease-in-out both; }
+.splash-spark.s1 { top: -8px; right: -14px; font-size: 22px; animation-delay: 0.45s; }
+.splash-spark.s2 { bottom: 14px; left: -20px; font-size: 15px; animation-delay: 0.65s; }
+.splash-spark.s3 { top: 30px; left: -26px; font-size: 13px; animation-delay: 0.85s; }
+.splash-name {
+  margin-top: 22px;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--splash-fg);
+  animation: splash-rise 0.6s ease-out 0.3s both;
+}
+.splash-sub { margin-top: 6px; font-size: 13.5px; letter-spacing: 0.08em; color: var(--splash-sub); animation: splash-rise 0.6s ease-out 0.45s both; }
+.splash-bar {
+  margin-top: 26px;
+  width: 120px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(124, 116, 255, 0.16);
+  overflow: hidden;
+  animation: splash-rise 0.5s ease-out 0.55s both;
+}
+.splash-bar i {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #4f7cff, #8a5cff);
+  animation: splash-load 1.1s ease-in-out 0.6s infinite;
+}
+
+@keyframes splash-pop { 0% { opacity: 0; transform: scale(0.55) rotate(-8deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+@keyframes splash-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes splash-twinkle { 0% { opacity: 0; transform: scale(0.3) rotate(0); } 50% { opacity: 1; transform: scale(1.15) rotate(45deg); } 100% { opacity: 0.85; transform: scale(1) rotate(90deg); } }
+@keyframes splash-rise { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes splash-glow { 0% { opacity: 0; transform: scale(0.6); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes splash-load { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+
+/* 系统开启「减少动态效果」时只做淡入淡出 */
+@media (prefers-reduced-motion: reduce) {
+  .splash-logo, .splash-spark, .splash-name, .splash-sub, .splash-bar, .splash-bar i, .splash-glow { animation: none; opacity: 1; transform: none; }
+}

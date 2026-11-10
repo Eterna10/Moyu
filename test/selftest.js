@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { nativeImage } = require('electron');
 
-module.exports = function selfTest(win, { ROOT, app }) {
+module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }) {
   // 打包后应用目录（asar）只读，输出到系统临时目录
   const OUT = app.isPackaged ? path.join(app.getPath('temp'), 'zmark-selftest-output') : path.join(ROOT, 'test-output');
   const DOC_DIR = path.join(OUT, 'doc');
@@ -69,6 +69,7 @@ module.exports = function selfTest(win, { ROOT, app }) {
 
     for (let i = 0; i < 100 && !(await js('document.body.dataset.ready === "1"').catch(() => false)); i++) await wait(100);
     check('应用启动完成', await js('document.body.dataset.ready === "1"'));
+    await splashStartupCheck();
     await js(`__zmark.openPath(${JSON.stringify(DOC)}, {force:true, skipConfirm:true})`);
     for (let i = 0; i < 50 && !(await js('!!document.querySelector("#write .mermaid-block svg, #write .mermaid-error")')); i++) await wait(200);
     await wait(400); // 等待大纲 / 字数统计的防抖刷新
@@ -332,6 +333,7 @@ module.exports = function selfTest(win, { ROOT, app }) {
 
     /* ---------- 插件系统 ---------- */
     await pluginTests();
+    await aiPromptTests();
 
     /* ---------- 纯文本模式 ---------- */
     await richTests();
@@ -346,6 +348,9 @@ module.exports = function selfTest(win, { ROOT, app }) {
 
     /* ---------- 大文档性能 ---------- */
     await perfTests();
+
+    /* ---------- 开启动画开关 ---------- */
+    await splashWindowTests();
 
     /* ---------- 深色主题与窄窗口外观 ---------- */
     await visualTests();
@@ -655,6 +660,86 @@ module.exports = function selfTest(win, { ROOT, app }) {
     check('插件开发指南可在应用内打开', (await text()).startsWith('# Moyu 插件开发指南') && (await js('!!document.querySelector("#write blockquote.callout-warning")')));
   }
   const byIdIn = (list, id) => list.find((p) => p.id === id) || {};
+
+  /** 一键提示词：内容覆盖插件系统真实提供的全部接口；界面可填写功能、套用示例、复制 */
+  async function aiPromptTests() {
+    const { Menu, clipboard } = require('electron');
+    // 临时插件记录 ctx 的真实结构
+    const udir = path.join(app.getPath('userData'), 'plugins', 'ctxdump');
+    fs.mkdirSync(udir, { recursive: true });
+    fs.writeFileSync(path.join(udir, 'plugin.json'), JSON.stringify({ id: 'test-ctxdump', name: '接口结构' }));
+    fs.writeFileSync(path.join(udir, 'main.js'), "Moyu.definePlugin({ activate(ctx) { const o = {}; for (const k of Object.keys(ctx)) o[k] = ctx[k] && typeof ctx[k] === 'object' && k !== 'manifest' ? Object.keys(ctx[k]) : typeof ctx[k]; window.__ctxShape = o; } });");
+    await js('__zmark.runCommand("plugins.reload")');
+    await wait(300);
+    const shape = await js('window.__ctxShape');
+    const prompt = await js('ZAIPrompt.build("在状态栏显示测试功能", { version: "1.6.1", apiVersion: 1 })');
+    const missing = [];
+    for (const [k, v] of Object.entries(shape || {})) {
+      if (!prompt.includes('ctx.' + k)) missing.push('ctx.' + k);
+      if (Array.isArray(v)) for (const sub of v) if (!prompt.includes(sub + '(')) missing.push(`ctx.${k}.${sub}`);
+    }
+    check('一键提示词：覆盖插件系统真实提供的全部接口', shape && Object.keys(shape).length > 10 && !missing.length, missing.join(', ') || JSON.stringify(shape));
+    check('一键提示词：包含功能描述、清单格式、入口约束与输出要求', prompt.includes('在状态栏显示测试功能') && prompt.includes('"apiVersion": 1') && prompt.includes('Moyu.definePlugin') && prompt.includes('# 六、输出格式') && prompt.includes('para.table'));
+    fs.rmSync(udir, { recursive: true, force: true });
+    await js('__zmark.runCommand("plugins.reload")');
+    await wait(300);
+
+    // 界面：偏好设置 → 插件 → 一键提示词
+    await js('__zmark.openPreferences("plugins")');
+    await wait(300);
+    check('一键提示词：按钮位于「插件开发指南」旁', await js('(() => { const a = document.querySelector(".prefs [data-act=plugin-guide]"), b = document.querySelector(".prefs [data-act=plugin-ai]"); return !!a && !!b && a.parentElement === b.parentElement; })()'));
+    await js('document.querySelector(".prefs [data-act=plugin-ai]").click()');
+    await wait(300);
+    await js('document.querySelector(".ai-modal [data-act=copy]").click()');
+    await wait(150);
+    check('一键提示词：未填写功能时提示先描述', (await js('document.activeElement === document.querySelector(".ai-feature")')));
+    await js('document.querySelector(".ai-modal [data-ex=\\"0\\"]").click()');
+    await wait(150);
+    const ui = await js('({ feature: document.querySelector(".ai-feature").value, prompt: document.querySelector(".ai-prompt").value })');
+    check('一键提示词：点击示例填入功能描述并更新提示词', /番茄|倒计时/.test(ui.feature) && ui.prompt.includes(ui.feature), ui.feature.slice(0, 40));
+    await shot('24-一键提示词.png');
+    await js('document.querySelector(".ai-modal [data-act=copy]").click()');
+    await wait(300);
+    const copied = String(await clipboard.readText());
+    check('一键提示词：复制到剪贴板', copied === ui.prompt, copied.slice(0, 40));
+    await key('Escape');
+    const walk = (items) => { for (const it of items) { if (it.label === '一键提示词（用 AI 生成插件）…') return true; if (it.submenu && walk(it.submenu.items)) return true; } return false; };
+    check('一键提示词：「插件」菜单与命令面板中可用', walk(Menu.getApplicationMenu().items) && (await js('ZExtras.COMMANDS.some(c => c[0] === "plugins.aiPrompt")')));
+  }
+
+  /** 启动时的开启动画：显示图标、编辑器就绪后淡出并移除、不阻挡点击 */
+  async function splashStartupCheck() {
+    const st = await js(`({ on: document.documentElement.classList.contains('splash-on'), visible: !!document.getElementById('splash') && getComputedStyle(document.getElementById('splash')).display === 'flex',
+      logo: (document.querySelector('.splash-logo') || {}).naturalWidth || 0, pe: document.getElementById('splash') ? getComputedStyle(document.getElementById('splash')).pointerEvents : '' })`);
+    if (st.visible) await shot('00-开启动画.png');
+    check('开启动画：启动时显示软件图标', st.on && st.visible && st.logo > 0, JSON.stringify(st));
+    check('开启动画：不阻挡鼠标操作', st.pe === 'none', st.pe);
+    for (let i = 0; i < 40 && (await js('!!document.getElementById("splash")')); i++) await wait(100);
+    check('开启动画：编辑器就绪后自动淡出并移除', !(await js('!!document.getElementById("splash")')) && !(await js('document.documentElement.classList.contains("splash-on")')));
+  }
+
+  /** 设置开关：关闭后不显示；新建窗口不重复播放 */
+  async function splashWindowTests() {
+    const probe = async (w) => {
+      for (let i = 0; i < 100 && !(await w.webContents.executeJavaScript('document.body.dataset.ready === "1"').catch(() => false)); i++) await wait(100);
+      const r = await w.webContents.executeJavaScript(`({ query: location.search, on: document.documentElement.classList.contains('splash-on') || !!window.__splash })`);
+      w.forceClose = true;
+      w.destroy();
+      return r;
+    };
+    await js('__zmark.setSetting({ showSplash: true })');
+    await wait(200);
+    const again = await probe(createWindow());
+    check('开启动画：新建窗口不重复播放', !again.on && !/splash=1/.test(again.query), JSON.stringify(again));
+    await js('__zmark.setSetting({ showSplash: false })');
+    await wait(200);
+    check('开启动画：设置中可关闭', getSettings().showSplash === false);
+    await js('__zmark.openPreferences("general")');
+    await wait(200);
+    check('开启动画：偏好设置「通用」中有开关', await js('!!document.querySelector(".prefs [data-k=showSplash]") && document.querySelector(".prefs [data-k=showSplash]").checked === false'));
+    await key('Escape');
+    await js('__zmark.setSetting({ showSplash: true })');
+  }
 
   /** 生成测试图片：kind = light（浅色平坦）/ dark（深色杂乱）/ blue（饱和蓝色渐变） */
   function makeImage(file, kind) {

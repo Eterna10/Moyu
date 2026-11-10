@@ -1,5 +1,5 @@
 // Moyu 主进程：窗口、菜单、文件系统、导出、设置
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -107,6 +107,7 @@ const DEFAULTS = {
   historyEnabled: true,
   historyMax: 50,
   slashCommands: true,
+  showSplash: true, // 启动时显示开启动画
   // 图像
   imageFolder: 'assets',
   // 图像（对标 Typora「偏好设置 → 图像」）
@@ -157,6 +158,7 @@ function saveSettings() {
 /* ---------------- 窗口 ---------------- */
 const windows = new Set();
 let startupHandled = false;
+let splashShown = false; // 开启动画只在程序启动时的第一个窗口播放
 function bgFor(theme) { return { night: '#1f2124', midnight: '#12192b', newsprint: '#f3f2ee' }[theme] || '#ffffff'; }
 
 function createWindow(filePath) {
@@ -179,13 +181,19 @@ function createWindow(filePath) {
       nodeIntegration: false,
       sandbox: true,
       spellcheck: true,
+      // 自检窗口在后台运行（常被其他窗口遮挡），关闭计时器节流，避免依赖时间的用例偶发失败
+      backgroundThrottling: !SELF_TEST,
     },
   });
   if (offset && !b.x) win.setPosition(win.getPosition()[0] + offset, win.getPosition()[1] + offset);
   win.pendingFile = filePath || null;
   win.forceClose = false;
   windows.add(win);
-  win.loadFile(path.join(ROOT, 'src', 'renderer', 'index.html'));
+  // 是否播放开启动画由主进程在加载前决定（通过地址参数传给页面），关闭时不会闪现
+  const splash = !splashShown && settings.showSplash !== false;
+  splashShown = true;
+  const dark = ['night', 'midnight'].includes(settings.theme);
+  win.loadFile(path.join(ROOT, 'src', 'renderer', 'index.html'), splash ? { query: { splash: '1', bg: bgFor(settings.theme), dark: dark ? '1' : '0' } } : undefined);
   win.once('ready-to-show', () => { if (SELF_TEST) win.showInactive(); else win.show(); });
 
   // 禁止页面导航与新窗口：外链交给系统浏览器
@@ -491,6 +499,8 @@ function registerIpc() {
     return null;
   });
   h('shell:reveal', (e, p) => { if (p) shell.showItemInFolder(p); });
+  // 由主进程写剪贴板：不受窗口是否处于焦点的限制
+  h('app:copyText', (e, text) => { clipboard.writeText(String(text)); return true; });
 }
 
 /* ---------------- 启动 ---------------- */
@@ -523,7 +533,7 @@ if (!SELF_TEST && !app.requestSingleInstanceLock()) {
     registerIpc();
     refreshMenu();
     const win = createWindow(SELF_TEST ? null : fileFromArgv(process.argv));
-    if (SELF_TEST) require(path.join(ROOT, 'test', 'selftest.js'))(win, { ROOT, app });
+    if (SELF_TEST) require(path.join(ROOT, 'test', 'selftest.js'))(win, { ROOT, app, createWindow, getSettings: () => settings });
   });
 
   app.on('window-all-closed', () => {

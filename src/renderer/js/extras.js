@@ -28,6 +28,7 @@
     ['theme.github', '主题：GitHub', '', 'theme'], ['theme.newsprint', '主题：Newsprint 报刊', '', 'theme'], ['theme.night', '主题：Night 夜间', '', 'theme dark'], ['theme.midnight', '主题：Midnight 午夜蓝', '', 'theme dark'],
     ['help.welcome', '欢迎文档', ''], ['help.syntax', 'Markdown 语法参考', ''], ['help.shortcuts', '快捷键一览', ''], ['help.pluginGuide', '插件开发指南', ''],
     ['help.checkUpdate', '检查更新…', '', 'update upgrade 升级'], ['help.about', '关于 Moyu', ''], ['plugins.manage', '管理插件…', '', 'plugin'], ['plugins.reload', '重新加载插件', '', 'plugin'],
+    ['plugins.aiPrompt', '一键提示词：用 AI 生成插件', '', 'ai prompt 插件 tishici'],
   ];
 
   /** 模糊匹配：字符按顺序出现即可；连续命中、词首命中得分更高。返回 { score, idx } 或 null */

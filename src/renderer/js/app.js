@@ -974,6 +974,7 @@
         <section data-pane="general">
           <h2>通用</h2>
           <h4 class="pref-h">启动</h4>
+          ${row('启动时显示开启动画', '启动 Moyu 时显示带图标的开启动画（约 1 秒，不影响加载速度）', check('showSplash'))}
           ${row('启动时', '', select('startupAction', [['new', '打开空白文档'], ['restoreLast', '重新打开上次的文件'], ['welcome', '打开欢迎文档']]))}
           ${row('最近文件数量', '「文件 → 最近打开」中保留的文件数', num('recentLimit', [[5, '5'], [10, '10'], [15, '15'], [20, '20'], [30, '30']]))}
           <h4 class="pref-h">保存</h4>
@@ -1141,6 +1142,7 @@
             <button class="text-btn" data-act="plugin-dir">打开插件目录</button>
             <button class="text-btn" data-act="plugin-reload">重新加载插件</button>
             <a href="#" data-act="plugin-guide">插件开发指南</a>
+            <button class="text-btn ai-btn" data-act="plugin-ai" title="生成一段完整的提示词，交给 AI 工具即可编写出对应功能的插件">✨ 一键提示词</button>
           </div>
           <div class="plugin-list"></div>
         </section>
@@ -1225,6 +1227,7 @@
       $('[data-act=plugin-dir]', el).onclick = () => api.invoke('plugins:openDir');
       $('[data-act=plugin-reload]', el).onclick = async () => { await runCommand('plugins.reload'); refreshPluginPane(); };
       $('[data-act=plugin-guide]', el).onclick = (e) => { e.preventDefault(); close(); runCommand('help.pluginGuide'); };
+      $('[data-act=plugin-ai]', el).onclick = () => { close(); runCommand('plugins.aiPrompt'); };
       renderPluginList($('.plugin-list', el));
       $('[data-act=close]', el).onclick = close;
       show(PREF_SECTIONS.some(([id]) => id === current) ? current : 'general');
@@ -1337,6 +1340,53 @@
 
     $('[data-act=check-update]', el).onclick = () => { close(); runCommand('help.checkUpdate'); };
     void current;
+  }
+
+  // 「一键提示词」中的功能示例，点击后填入描述框
+  const AI_EXAMPLES = [
+    ['番茄钟', '在状态栏显示一个 25 分钟的专注倒计时：点击开始 / 暂停，结束时弹出提示并记录今天完成的番茄数（保存在插件数据中）；提供「开始专注」「重置」两个命令，快捷键 Ctrl+Alt+P。'],
+    ['选中翻译', '选中一段文字后执行命令「翻译选中文字」（快捷键 Ctrl+Alt+T），弹出对话框显示译文，可选择「替换原文」或「插入到下一段」。翻译接口地址与密钥在首次使用时用输入框询问并保存在插件数据中。'],
+    ['修改时间', '保存文档时自动更新文档开头 YAML Front Matter 中的 updated 字段为当前时间（格式 2026-01-01 12:00）；如果没有 Front Matter 则不做任何改动。'],
+    ['柱状图代码块', '支持 ```chart 代码块：每行写「名称: 数值」，渲染为使用 SVG 绘制的横向柱状图，颜色使用主题强调色，深色主题下清晰可读，导出 PDF 时同样显示。'],
+  ];
+
+  /** 「一键提示词」：描述想要的功能，生成交给 AI 编写插件的完整提示词 */
+  function openAIPrompt() {
+    const info = { version: state.info.version, apiVersion: window.Moyu.apiVersion };
+    showModal(`<h3>✨ 一键提示词：用 AI 生成插件</h3>
+      <ol class="ai-steps"><li>在下方用自己的话描述想要的功能（也可以点示例后修改）。</li>
+        <li>点击「复制提示词」，粘贴到 ChatGPT、Claude、DeepSeek、通义千问等 AI 工具中发送。</li>
+        <li>按 AI 的说明把生成的文件放进插件目录，然后执行「插件 → 重新加载插件」。</li></ol>
+      <label class="ai-label">想要实现的功能</label>
+      <textarea class="ai-feature" spellcheck="false" placeholder="例如：选中文字后按 Ctrl+Alt+U，把英文转换为大写；在状态栏显示今天写了多少字……"></textarea>
+      <div class="ai-examples">示例：${AI_EXAMPLES.map(([t], i) => `<button class="text-btn" data-ex="${i}">${esc(t)}</button>`).join('')}</div>
+      <label class="ai-label">提示词预览 <small>（已包含 Moyu 插件的运行环境、完整接口、约束与输出要求；可直接编辑）</small></label>
+      <textarea class="ai-prompt" spellcheck="false"></textarea>
+      <div class="actions"><button class="text-btn" data-act="dir">打开插件目录</button><button class="text-btn" data-act="guide">插件开发指南</button>
+        <span style="flex:1"></span><span class="ai-count"></span><button class="text-btn" data-act="close">关闭</button><button class="text-btn primary" data-act="copy">复制提示词</button></div>`,
+    (el, close) => {
+      el.classList.add('ai-modal');
+      const feature = $('.ai-feature', el);
+      const prompt = $('.ai-prompt', el);
+      const count = $('.ai-count', el);
+      const regen = () => { prompt.value = ZAIPrompt.build(feature.value, info); count.textContent = `${prompt.value.length} 字`; };
+      feature.addEventListener('input', regen);
+      prompt.addEventListener('input', () => { count.textContent = `${prompt.value.length} 字`; });
+      $$('[data-ex]', el).forEach((b) => { b.onclick = () => { feature.value = AI_EXAMPLES[Number(b.dataset.ex)][1]; regen(); feature.focus(); }; });
+      $('[data-act=dir]', el).onclick = () => api.invoke('plugins:openDir');
+      $('[data-act=guide]', el).onclick = () => { close(); runCommand('help.pluginGuide'); };
+      $('[data-act=close]', el).onclick = close;
+      const copy = $('[data-act=copy]', el);
+      copy.onclick = async () => {
+        if (!feature.value.trim()) { feature.focus(); toast('请先描述想要实现的功能', true); return; }
+        await api.invoke('app:copyText', prompt.value);
+        copy.textContent = '已复制 ✓';
+        toast('已复制提示词，粘贴到 AI 工具中即可');
+        setTimeout(() => { copy.textContent = '复制提示词'; }, 1800);
+      };
+      regen();
+      feature.focus();
+    });
   }
 
   /** 恢复默认设置（保留使用记录），并立即应用到界面 */
@@ -1769,6 +1819,7 @@
     'help.pluginGuide': () => openHelp('docs/插件开发指南.md', '插件开发指南'),
     'help.about': showAbout,
     'plugins.manage': () => { closeModals(); openPreferences('plugins'); },
+    'plugins.aiPrompt': () => { closeModals(); openAIPrompt(); },
     'plugins.reload': async () => {
       const list = await pluginHost.reload();
       const failed = list.filter((p) => p.enabled && p.error).length;
@@ -1831,7 +1882,7 @@
         if (!$('#findbar').hidden) requestAnimationFrame(highlightRendered);
       },
       onLink,
-      onCopy: (t) => navigator.clipboard.writeText(t).then(() => toast('已复制代码')),
+      onCopy: (t) => api.invoke('app:copyText', t).then(() => toast('已复制代码')),
       onPasteImage,
       onSelection,
     });
@@ -1949,10 +2000,23 @@
     }
     window.__zmark = { extras, refreshFonts, editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, exportDoc, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
     document.body.dataset.ready = '1';
+    hideSplash();
+  }
+
+  /** 开启动画：编辑器就绪且至少展示约 1.1 秒后淡出并移除 */
+  function hideSplash(immediate) {
+    const el = document.getElementById('splash');
+    if (!el || !window.__splash) { if (el) el.remove(); return; }
+    const wait = immediate ? 0 : Math.max(0, 1100 - (performance.now() - window.__splash.start));
+    setTimeout(() => {
+      el.classList.add('splash-leave');
+      setTimeout(() => { el.remove(); document.documentElement.classList.remove('splash-on'); window.__splash.done = true; }, 480);
+    }, wait);
   }
 
   init().catch((e) => {
     console.error(e);
+    hideSplash(true);
     document.body.innerHTML = `<pre style="padding:20px;color:#d1242f">Moyu 启动失败：\n${esc(e.stack || e.message)}</pre>`;
   });
 })();

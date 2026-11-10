@@ -9,7 +9,7 @@ const INVOKE = new Set([
   'plugins:list', 'plugins:setEnabled', 'plugins:openDir', 'plugins:dir', 'plugins:storageGet', 'plugins:storageSet', 'plugins:setMenu',
   'theme:pickBackground', 'theme:bgUrl', 'theme:bgData', 'theme:export', 'theme:import', 'font:list', 'font:import', 'font:remove', 'font:dataUrl',
   'update:check', 'update:download', 'update:cancel', 'update:install', 'history:list', 'history:read', 'history:snapshot', 'history:clear',
-  'app:addRecent', 'app:readAsset', 'app:info', 'app:helpDoc',
+  'app:addRecent', 'app:copyText', 'app:readAsset', 'app:info', 'app:helpDoc',
   'export:html', 'export:pdf', 'shell:open', 'shell:reveal',
 ]);
 const EVENTS = new Set(['menu', 'open-file', 'before-close', 'settings-changed', 'plugins-changed', 'update-progress']);

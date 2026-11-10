@@ -45,6 +45,7 @@ function pluginMenu(template, items, c, openPluginDir) {
     c('重新加载插件', 'plugins.reload'),
     { type: 'separator' },
     c('插件开发指南', 'help.pluginGuide'),
+    c('一键提示词（用 AI 生成插件）…', 'plugins.aiPrompt'),
   );
   return { label: '插件(&X)', submenu };
 }
