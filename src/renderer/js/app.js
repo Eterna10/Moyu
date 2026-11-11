@@ -228,6 +228,7 @@
 
   function loadText(content, meta) {
     meta = meta || {};
+    saveScroll(); // 离开当前文档前记下读到的位置
     // 已有文件保持原换行符；新文件使用「新建文件的换行符」设置
     state.eol = meta.filePath ? (/\r\n/.test(content) ? '\r\n' : '\n') : (state.settings.defaultEol === 'CRLF' ? '\r\n' : '\n');
     let t = content.replace(/\r\n?/g, '\n');
@@ -250,20 +251,23 @@
 
   /* 阅读位置：记住每个文件滚动到的位置（最近 200 个），重新打开时回到那里 */
   let positionTimer = 0;
+  /** 立即记录当前文档的阅读位置（切换文档、关闭窗口之前调用；滚动停止后也会调用） */
+  function saveScroll() {
+    clearTimeout(positionTimer);
+    if (!editor || !state.filePath || state.sourceMode || state.settings.restoreScroll === false) return;
+    const top = Math.round($('#content').scrollTop);
+    const map = Object.assign({}, state.settings.docPositions || {});
+    if ((map[state.filePath] || 0) === top) return;
+    delete map[state.filePath]; // 重新插入到末尾，最旧的排在最前
+    if (top > 0) map[state.filePath] = top;
+    const keys = Object.keys(map);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete map[k];
+    setSetting({ docPositions: map });
+  }
   function rememberScroll() {
     if (!state.filePath || state.sourceMode || state.settings.restoreScroll === false) return;
     clearTimeout(positionTimer);
-    positionTimer = setTimeout(() => {
-      if (!state.filePath || state.sourceMode) return;
-      const top = Math.round($('#content').scrollTop);
-      const map = Object.assign({}, state.settings.docPositions || {});
-      if ((map[state.filePath] || 0) === top) return;
-      delete map[state.filePath]; // 重新插入到末尾，最旧的排在最前
-      if (top > 0) map[state.filePath] = top;
-      const keys = Object.keys(map);
-      for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete map[k];
-      setSetting({ docPositions: map });
-    }, 800);
+    positionTimer = setTimeout(saveScroll, 800);
   }
 
   function restoreScroll() {
@@ -422,7 +426,7 @@
   async function onBeforeClose() {
     let ok = true;
     try { ok = await confirmDiscard(); } catch (e) { ok = true; } // 初始化失败时也必须能关闭窗口
-    if (ok) { if (ws) await ws.clearRecovery(); api.invoke('win:close'); }
+    if (ok) { saveScroll(); if (ws) await ws.clearRecovery(); api.invoke('win:close'); }
   }
 
   /* ======================= 标题 / 状态栏 / 大纲 ======================= */

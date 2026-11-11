@@ -97,6 +97,7 @@
         if (!this.isAllSelected()) return;
         e.preventDefault();
         e.clipboardData.setData('text/plain', this.text);
+        e.clipboardData.setData('text/x-moyu-markdown', this.text); // 粘贴回 Moyu 时原样使用
         e.clipboardData.setData('text/html', this.root.innerHTML);
         if (cut) this.clearAll();
       };

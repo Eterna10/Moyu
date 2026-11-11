@@ -22,6 +22,8 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
   };
   const shot = async (name) => {
     await wait(250);
+    await wc.capturePage(); // 第一次截到的可能还是上一帧
+    await wait(60);
     const img = await wc.capturePage();
     fs.writeFileSync(path.join(OUT, name), img.toPNG());
   };

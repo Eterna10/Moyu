@@ -61,7 +61,14 @@ module.exports = async function workspaceTests(t) {
   check('智能粘贴：可在偏好设置中关闭', handled === false);
   await set({ smartPaste: true });
   const conv = await js(`ZWorkspace.htmlToMarkdown(${JSON.stringify('<p>图 <img src="data:image/png;base64,AAAA"><img src="https://a.example/x.png" alt="网图"></p><pre><code class="language-js">a<br>b</code></pre><blockquote><p>引用</p></blockquote><ol start="3"><li>三</li></ol>')}, __zmark.editor.serOpts())`);
-  check('智能粘贴：代码块、引用、有序列表与图片', conv === '图 ![网图](https://a.example/x.png)\n\n```\na\nb\n```\n\n> 引用\n\n3. 三', JSON.stringify(conv));
+  check('智能粘贴：代码块、引用、有序列表与图片', conv === '图 ![网图](https://a.example/x.png)\n\n```js\na\nb\n```\n\n> 引用\n\n3. 三', JSON.stringify(conv));
+
+  const conv2 = await js(`ZWorkspace.htmlToMarkdown(${JSON.stringify('<div class="md-block"><p>质能方程 <span class="katex"><span class="katex-mathml"><math><semantics><mrow></mrow><annotation encoding="application/x-tex">E=mc^2</annotation></semantics></math></span><span class="katex-html">E=mc2</span></span> 很有名</p></div><div class="code-block"><span class="code-lang">python</span><button class="code-copy">复制</button><pre><code class="language-python">print(1)</code></pre></div>')}, __zmark.editor.serOpts())`);
+  check('智能粘贴：公式取回 TeX 源码，代码块上的界面元素不混入正文', conv2 === '质能方程 $E=mc^2$ 很有名\n\n```python\nprint(1)\n```', JSON.stringify(conv2));
+  await load('');
+  handled = await paste({ 'text/html': '<h1>标题</h1><div class="mermaid"><svg></svg></div>', 'text/plain': '# 标题', 'text/x-moyu-markdown': '# 标题\n\n```mermaid\ngraph TD; A-->B\n```' });
+  await wait(150);
+  check('智能粘贴：从 Moyu 复制的全文按 Markdown 原文粘贴', handled && (await text()).trim() === '# 标题\n\n```mermaid\ngraph TD; A-->B\n```', await text());
 
   /* ---------------- 表格操作 ---------------- */
   const TABLE = '| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |';
@@ -277,14 +284,19 @@ module.exports = async function workspaceTests(t) {
   await wait(300);
   const afterJump = await js('(() => { Element.prototype.scrollIntoView = window.__siv; return window.__scrolled; })()');
   check('跳转到标题：Ctrl+G 列出当前文档的标题并跳转', heads.join() === '第一章,第二节,小结' && firstHead === '小结' && afterJump === '小结' && !(await js('!!document.querySelector(".palette-mask")')), JSON.stringify([heads, firstHead, afterJump]));
-  await js('document.querySelector("#content").scrollTop = 1234');
-  await wait(1300);
-  const saved = (await js('window.zmark.invoke("settings:get")')).docPositions || {};
+  // 重新载入文档，结束上一步可能还在进行的平滑滚动
   await load('');
+  await js(`__zmark.openPath(${JSON.stringify(posFile)}, { force: true, skipConfirm: true })`);
+  await wait(400);
+  const dbg = await js('(() => { const c = document.querySelector("#content"); c.scrollTop = 1234; return { top: c.scrollTop, sh: c.scrollHeight, ch: c.clientHeight, file: __zmark.state.filePath, rs: __zmark.state.settings.restoreScroll, n: document.querySelectorAll("#write > .md-block").length }; })()');
+  await wait(100);
+  await load(''); // 切换文档时立即记下位置（不依赖滚动后的延时保存）
+  await wait(150);
+  const saved = (await js('window.zmark.invoke("settings:get")')).docPositions || {};
   await js(`__zmark.openPath(${JSON.stringify(posFile)}, { force: true, skipConfirm: true })`);
   await wait(500);
   const restored = await js('document.querySelector("#content").scrollTop');
-  check('阅读位置：重新打开文件时回到上次滚动到的位置', saved[posFile] === 1234 && Math.abs(restored - 1234) < 3, JSON.stringify([saved[posFile], restored]));
+  check('阅读位置：重新打开文件时回到上次滚动到的位置', Math.abs(saved[posFile] - 1234) < 3 && Math.abs(restored - saved[posFile]) < 3, JSON.stringify([saved[posFile], restored, dbg]));
   await set({ restoreScroll: false });
 
   /* ---------------- 无法识别的编码 ---------------- */

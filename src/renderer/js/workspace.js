@@ -45,6 +45,16 @@
     try { doc = new DOMParser().parseFromString(String(html), 'text/html'); } catch (e) { return null; }
     const body = doc.body;
     if (!body) return null;
+    // KaTeX 渲染的公式：取回其中保存的 TeX 源码（行内 $…$，独立公式 $$…$$）
+    body.querySelectorAll('.katex-display, .katex').forEach((el) => {
+      if (!el.isConnected) return;
+      const ann = el.querySelector('annotation[encoding="application/x-tex"]');
+      if (!ann) return;
+      const tex = ann.textContent.trim();
+      if (el.classList.contains('katex-display')) { const p = doc.createElement('p'); p.textContent = '$$' + tex + '$$'; el.replaceWith(p); } else if (!el.closest('.katex-display')) el.replaceWith('$' + tex + '$');
+    });
+    // 代码块上的「复制」按钮、语言标签、标题锚点等界面元素不是正文
+    body.querySelectorAll('.code-copy, .code-lang, .heading-anchor, .footnote-backref').forEach((el) => el.remove());
     body.querySelectorAll('script, style, meta, link, title, head, noscript, template, svg, math, iframe, object, button, select, textarea, input').forEach((el) => el.remove());
     // 用样式表示的加粗 / 斜体 / 删除线（Google 文档、Word 等）转为对应的标签；font-weight: normal 的 <b> 只是容器
     body.querySelectorAll('[style]').forEach((el) => {
@@ -56,6 +66,13 @@
       if (/font-weight:\s*(bold|[6-9]00)/i.test(st)) wrapIn('strong');
       if (/font-style:\s*italic/i.test(st)) wrapIn('em');
       if (/text-decoration[^;]*line-through/i.test(st)) wrapIn('del');
+    });
+    // 代码块的语言写在 class 里（language-js、highlight-source-js 等），清理属性前先记到 title 上
+    body.querySelectorAll('pre').forEach((pre) => {
+      const code = pre.querySelector('code');
+      const cls = [pre.className, code && code.className, pre.parentElement && pre.parentElement.className].filter(Boolean).join(' ');
+      const m = /(?:language-|lang-|highlight-source-)([\w+#.-]+)/.exec(cls);
+      if (m) pre.setAttribute('title', 'lang:' + m[1]); else pre.removeAttribute('title');
     });
     body.querySelectorAll(CONTAINER_TAGS).forEach((el) => rename(el, 'div'));
     const clean = DOMPurify.sanitize(body.innerHTML, { ALLOWED_TAGS: PASTE_TAGS, ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'start'], KEEP_CONTENT: true });
@@ -78,7 +95,13 @@
     // 代码块：<br> 是换行，内部的着色标签去掉
     root.querySelectorAll('pre').forEach((pre) => {
       pre.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
-      pre.textContent = pre.textContent;
+      const lang = /^lang:(.+)$/.exec(pre.getAttribute('title') || '');
+      pre.removeAttribute('title');
+      const code = document.createElement('code');
+      if (lang) code.className = 'language-' + lang[1];
+      code.textContent = pre.textContent;
+      pre.textContent = '';
+      pre.appendChild(code);
     });
     // 单元格中的段落、列表等块级内容压平成用 <br> 分隔的行内内容
     root.querySelectorAll('td, th').forEach((cell) => {
@@ -159,6 +182,9 @@
       // 代码块、公式块、HTML、Front Matter、表格中粘贴的都是原样文字
       if (/^\s*(`{3,}|~{3,}|\$\$|<|\|)/.test(v) || (editor.active.start === 0 && /^---\s*$/.test(v.split('\n')[0]))) return false;
       const text = e.clipboardData.getData('text/plain') || '';
+      // 从 Moyu 里复制的整篇文档带有 Markdown 原文：原样粘贴，不经过 HTML 转换
+      const own = e.clipboardData.getData('text/x-moyu-markdown');
+      if (own && own.includes('\n')) { e.preventDefault(); editor.pasteMarkdown(own); return true; }
       const sel = editor.getSelectedText();
       const url = text.trim();
       if (sel && !sel.includes('\n') && /^(https?:\/\/|mailto:)\S+$/i.test(url) && !/^(https?:\/\/|mailto:)\S+$/i.test(sel.trim())) {
@@ -354,7 +380,7 @@
       const query = box.value;
       const seq = ++search.seq;
       if (!state.folder) { renderSearch(null); statusEl.innerHTML = '请先打开一个文件夹。<button class="text-btn" id="search-open-folder">打开文件夹…</button>'; $('#search-open-folder').onclick = () => ctx.runCommand('file.openFolder'); return null; }
-      if (!query.trim()) { renderSearch(null); return null; }
+      if (!query.trim()) { renderSearch(null); statusEl.textContent = SEARCH_HINT; return null; }
       statusEl.textContent = '正在搜索…';
       try {
         const r = await api.invoke('fs:search', state.folder, query, { caseSensitive: flag('#search-case'), regex: flag('#search-regex') });
@@ -383,6 +409,8 @@
       resultsEl.querySelectorAll('.search-file').forEach((el) => el.classList.toggle('current', Number(el.dataset.f) === fi));
     }
 
+    const SEARCH_HINT = '输入关键词，在当前文件夹的所有文档中查找。支持区分大小写（Aa）与正则表达式（.*）。';
+    statusEl.textContent = SEARCH_HINT;
     let searchTimer = 0;
     box.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 300); });
     box.addEventListener('keydown', (e) => {
