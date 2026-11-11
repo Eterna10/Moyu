@@ -22,7 +22,7 @@ button { font-family: inherit; }
 #sidebar {
   width: var(--sidebar-width, 260px);
   min-width: 160px;
-  max-width: 50vw;
+  max-width: max(160px, min(50vw, 100vw - 380px)); /* 窄窗口中为正文至少留出约 380px */
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
   display: flex;
@@ -229,6 +229,13 @@ body.source-mode #source { display: block; }
 }
 .status-left, .status-right { display: flex; align-items: center; gap: 4px; }
 .status-right { gap: 14px; padding-right: 6px; }
+/* 窄窗口：左侧按钮与右侧各项不换行，字数统计可收缩为省略号，避免状态栏内容互相重叠 */
+#statusbar { gap: 10px; white-space: nowrap; }
+.status-left { flex-shrink: 0; }
+.status-right { min-width: 0; }
+.status-right > * { flex-shrink: 0; }
+.status-right > #sb-count { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 700px) { #sb-selection { display: none; } }
 .status-btn {
   border: 0; background: transparent; color: var(--text-soft); height: 22px; padding: 0 8px;
   border-radius: 4px; cursor: pointer; font-size: 12px;

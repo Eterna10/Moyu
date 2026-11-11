@@ -417,17 +417,20 @@ function registerIpc() {
     });
     return r.response;
   });
-  h('dialog:message', async (e, opts) => (await dialog.showMessageBox(focusedWin(e), Object.assign({ title: 'Moyu' }, opts))).response);
+  h('dialog:message', async (e, opts) => {
+    if (SELF_TEST) return opts && opts.cancelId !== undefined ? opts.cancelId : 1; // 自检不弹出系统对话框，按「取消」处理
+    return (await dialog.showMessageBox(focusedWin(e), Object.assign({ title: 'Moyu' }, opts))).response;
+  });
 
   h('fs:read', (e, p) => {
-    const buf = fs.readFileSync(p);
-    let content = buf.toString('utf8');
-    if (content.charCodeAt(0) === 0xfeff) content = content.slice(1);
-    return { content, mtime: fs.statSync(p).mtimeMs };
+    const st = fs.statSync(p);
+    if (st.size > MAX_DOC_BYTES) throw new Error(`文件过大（${(st.size / 1048576).toFixed(0)} MB），Moyu 最多打开 ${MAX_DOC_BYTES / 1048576} MB 的文本文件`);
+    const r = decodeText(fs.readFileSync(p));
+    return { content: r.content, encoding: r.encoding, lossy: !!r.lossy, mtime: st.mtimeMs };
   });
   h('fs:write', (e, p, content) => {
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, content, 'utf8');
+    writeFileAtomic(p, content);
     return { mtime: fs.statSync(p).mtimeMs };
   });
   h('fs:stat', (e, p) => { try { return fs.statSync(p).mtimeMs; } catch (err) { return null; } });
@@ -505,6 +508,47 @@ function registerIpc() {
   h('shell:reveal', (e, p) => { if (p) shell.showItemInFolder(p); });
   // 由主进程写剪贴板：不受窗口是否处于焦点的限制
   h('app:copyText', (e, text) => { clipboard.writeText(String(text)); return true; });
+}
+
+/* ---------------- 文本文件读写 ---------------- */
+const MAX_DOC_BYTES = 50 * 1048576;
+
+/**
+ * 按实际编码解码文本文件：UTF-8（含 BOM）、UTF-16（BOM）、GB18030 / GBK。
+ * 中文 Windows 上常见 GBK 编码的 .md / .txt，按 UTF-8 读取会成为乱码，保存后原文无法恢复。
+ */
+function decodeText(buf) {
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return { content: buf.toString('utf8', 3), encoding: 'UTF-8' };
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) return { content: new TextDecoder('utf-16le').decode(buf.subarray(2)), encoding: 'UTF-16 LE' };
+  if (buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff) return { content: new TextDecoder('utf-16be').decode(buf.subarray(2)), encoding: 'UTF-16 BE' };
+  try { return { content: new TextDecoder('utf-8', { fatal: true }).decode(buf), encoding: 'UTF-8' }; } catch (e) { /* 不是 UTF-8 */ }
+  try { return { content: new TextDecoder('gb18030', { fatal: true }).decode(buf), encoding: 'GB18030' }; } catch (e) { /* 也不是 GB18030 */ }
+  return { content: buf.toString('utf8'), encoding: 'UTF-8', lossy: true };
+}
+
+/**
+ * 原子写入：先写到同目录的临时文件再改名覆盖，写入中途崩溃或断电不会留下被截断的文档。
+ * 符号链接、硬链接保持原样直接写入；临时文件无法创建或改名时（如目录只读）退回直接写入。
+ */
+function writeFileAtomic(p, content) {
+  let direct = false;
+  let mode;
+  try {
+    const st = fs.lstatSync(p);
+    if (st.isSymbolicLink() || st.nlink > 1) direct = true;
+    mode = st.mode;
+  } catch (e) { /* 新文件 */ }
+  if (!direct) {
+    const tmp = path.join(path.dirname(p), `.${path.basename(p)}.${process.pid}.tmp`);
+    try {
+      fs.writeFileSync(tmp, content, mode === undefined ? { encoding: 'utf8' } : { encoding: 'utf8', mode });
+      fs.renameSync(tmp, p);
+      return;
+    } catch (e) {
+      try { fs.rmSync(tmp, { force: true }); } catch (e2) { /* 忽略 */ }
+    }
+  }
+  fs.writeFileSync(p, content, 'utf8');
 }
 
 /* ---------------- 启动 ---------------- */

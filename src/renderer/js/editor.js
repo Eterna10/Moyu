@@ -87,6 +87,91 @@
       ta.addEventListener('mouseup', () => this.emitSelection());
       root.addEventListener('click', (e) => this.onRootClick(e));
       this._previewTimer = 0;
+
+      // 全选整篇文档后的键盘与剪贴板操作（此时没有编辑块，焦点在页面上）
+      this.allSelected = false;
+      document.addEventListener('mousedown', () => { this.allSelected = false; }, true);
+      document.addEventListener('keydown', (e) => { if (this.isAllSelected()) this.onAllSelectedKey(e); }, true);
+      const onCopy = (e, cut) => {
+        if (!this.isAllSelected()) return;
+        e.preventDefault();
+        e.clipboardData.setData('text/plain', this.text);
+        e.clipboardData.setData('text/html', this.root.innerHTML);
+        if (cut) this.clearAll();
+      };
+      document.addEventListener('copy', (e) => onCopy(e, false), true);
+      document.addEventListener('cut', (e) => onCopy(e, true), true);
+      document.addEventListener('paste', (e) => {
+        if (!this.isAllSelected()) return;
+        const t = e.clipboardData.getData('text/plain');
+        if (!t) return;
+        e.preventDefault();
+        this.clearAll();
+        this.insertText(t.replace(/\r\n?/g, '\n'));
+      }, true);
+    }
+
+    /* ======================= 全选 ======================= */
+
+    /** 当前编辑块的内容是否已全部选中 */
+    blockFullySelected() {
+      const ta = this.hl.ta;
+      return ta.selectionStart === 0 && ta.selectionEnd === ta.value.length;
+    }
+
+    /**
+     * 全选。多行的块（代码块、表格、列表等）先选中块内内容，再按一次选中整篇文档；
+     * 其它情况直接选中整篇文档。返回 false 表示应由浏览器在当前编辑块内全选。
+     */
+    selectAll() {
+      if (this.active) {
+        if (this.hl.value.includes('\n') && !this.blockFullySelected()) return false;
+        this.commit();
+      }
+      if (!this.text.trim()) { this.ensureActive(); return true; }
+      if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+      const sel = window.getSelection();
+      const r = document.createRange();
+      r.selectNodeContents(this.root);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      this.allSelected = true;
+      if (this.opts.onSelection) this.opts.onSelection(this.text);
+      return true;
+    }
+
+    isAllSelected() {
+      if (!this.allSelected) return false;
+      const sel = window.getSelection();
+      if (this.active || !sel.rangeCount || sel.isCollapsed || !this.root.contains(sel.anchorNode)) { this.allSelected = false; return false; }
+      return true;
+    }
+
+    /** 清空整篇文档（可撤销），光标留在空文档中 */
+    clearAll() {
+      this.allSelected = false;
+      window.getSelection().removeAllRanges();
+      this.replaceAllText('');
+      this.activateRange(0, 1, 0);
+    }
+
+    onAllSelectedKey(e) {
+      const mod = e.ctrlKey || e.metaKey;
+      const k = e.key;
+      if (e.target !== document.body && !this.root.contains(e.target)) return; // 焦点在其它输入框中
+      if (k === 'Backspace' || k === 'Delete') { e.preventDefault(); this.clearAll(); return; }
+      if (mod || e.altKey) return; // 复制 / 剪切 / 粘贴 / 撤销等交给各自的处理
+      if (k === 'Escape' || k.startsWith('Arrow') || k === 'Home' || k === 'End') {
+        e.preventDefault();
+        this.allSelected = false;
+        window.getSelection().removeAllRanges();
+        if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'Home') { const b = this.blocks[0]; if (b) this.activateRange(b.start, b.end, 0); }
+        else if (k !== 'Escape') { const b = this.blocks[this.blocks.length - 1]; if (b) this.activateRange(b.start, b.end); }
+        return;
+      }
+      if (k === 'Enter') { e.preventDefault(); this.clearAll(); return; }
+      // 直接输入（含输入法）：用输入的内容替换整篇文档，按键随后进入新的空编辑块
+      if (k.length === 1 || e.keyCode === 229) this.clearAll();
     }
 
     /* ======================= 公共 API ======================= */

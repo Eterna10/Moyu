@@ -1162,6 +1162,65 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     er = await enterRun(true);
     check('回车：空段落中连续回车每次都新增一行（纯文本模式）', er.t.trim() === want && er.y1 - er.y0 > 60, JSON.stringify(er));
     await key('Escape');
+
+    // 全选：回车后光标在空行中，Ctrl+A 仍应选中整篇文档
+    const selDoc = '第一段\n\n```js\nlet a = 1;\nlet b = 2;\n```\n\n第二段';
+    const allSel = () => js('({ all: __zmark.editor.isAllSelected(), sel: window.getSelection().toString(), editing: __zmark.editor.isEditing() })');
+    const copyData = (type) => js(`(() => { const dt = new DataTransfer(); document.dispatchEvent(new ClipboardEvent(${JSON.stringify(type)}, { clipboardData: dt, bubbles: true, cancelable: true })); return dt.getData('text/plain'); })()`);
+    for (const rich of [false, true]) {
+      const tag = rich ? '纯文本模式' : '源码编辑';
+      await set({ richMode: rich });
+      await js(`__zmark.loadText(${JSON.stringify(selDoc)}, {})`);
+      await js('__zmark.editor.activateRange(0, 1)');
+      await key('Enter');
+      await key('A', ['control']);
+      await wait(150);
+      let s = await allSel();
+      check(`全选：回车后在空行中按 Ctrl+A 选中整篇文档（${tag}）`, s.all && !s.editing && s.sel.includes('第一段') && s.sel.includes('let b = 2;') && s.sel.includes('第二段'), JSON.stringify(s));
+      check(`全选：复制得到完整的 Markdown 源码（${tag}）`, (await copyData('copy')) === selDoc);
+      wc.sendInputEvent({ type: 'keyDown', keyCode: 'x' });
+      wc.sendInputEvent({ type: 'char', keyCode: 'x' });
+      wc.sendInputEvent({ type: 'keyUp', keyCode: 'x' });
+      await wait(200);
+      check(`全选：直接输入替换整篇文档（${tag}）`, (await text()).trim() === 'x', await text());
+      await key('Z', ['control']);
+      const afterOne = (await text()).trim();
+      await key('Z', ['control']);
+      await wait(150);
+      check(`全选：替换后可以逐步撤销（${tag}）`, afterOne === '' && (await text()).trim() === selDoc, JSON.stringify([afterOne, await text()]));
+      await key('Escape');
+      await js('__zmark.editor.activateRange(2, 6, 3)');
+      await wait(100);
+      await key('A', ['control']);
+      await wait(150);
+      s = await allSel();
+      const inBlock = !s.all && s.editing;
+      await key('A', ['control']);
+      await wait(150);
+      s = await allSel();
+      check(`全选：代码块中第一次选中块内内容，再按一次选中整篇（${tag}）`, inBlock && s.all && s.sel.includes('第二段'), JSON.stringify({ inBlock, s }));
+      await key('Backspace');
+      await wait(150);
+      check(`全选：退格清空文档并可撤销（${tag}）`, (await text()).trim() === '' && (await js('__zmark.editor.isEditing()')), await text());
+      await key('Z', ['control']);
+      await wait(150);
+      check(`撤销：清空文档后在空编辑框中按 Ctrl+Z 可以恢复（${tag}）`, (await text()).trim() === selDoc, await text());
+      await key('A', ['control']);
+      await wait(100);
+      await key('Right');
+      await wait(100);
+      s = await allSel();
+      check(`全选：方向键取消全选并把光标放到文末（${tag}）`, !s.all && s.editing && (await text()).trim() === selDoc && (await val()) === '第二段', JSON.stringify({ s, v: await val(), t: await text() }));
+      await key('Escape');
+    }
+    await js('__zmark.runCommand("edit.find")');
+    await wait(150);
+    await type('查找内容');
+    await key('A', ['control']);
+    await wait(100);
+    const fsel = await js('({ a: document.activeElement.id, s: document.activeElement.selectionStart, e: document.activeElement.selectionEnd, all: __zmark.editor.isAllSelected() })');
+    check('全选：查找框中只选中输入框内容', fsel.a === 'find-input' && fsel.s === 0 && fsel.e === 4 && !fsel.all, JSON.stringify(fsel));
+    await key('Escape');
     await set({ richMode: false });
 
     // 图片放大：双击图片
@@ -1630,6 +1689,41 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     await js('window.dispatchEvent(new Event("focus"))');
     await wait(500);
     check('通用：外部修改自动重新加载', (await text()) === '外部修改', await text());
+
+    // 保存前检查磁盘上的文件是否被其它程序改动：不悄悄覆盖
+    await js('__zmark.editor.replaceAllText("我的修改")');
+    await wait(1100); // 保证修改时间不同
+    fs.writeFileSync(f3, '别的程序写入\n');
+    const autoRes = await js('__zmark.save(false, true)');
+    await wait(300);
+    check('保存：文件被其它程序改动后，自动保存不覆盖', autoRes === false && fs.readFileSync(f3, 'utf8') === '别的程序写入\n', String(autoRes));
+    await wait(1100);
+    fs.writeFileSync(f3, '别的程序再次写入\n');
+    const manRes = await js('__zmark.save(false, false)');
+    check('保存：手动保存时先询问，取消则不覆盖', manRes === false && fs.readFileSync(f3, 'utf8') === '别的程序再次写入\n', String(manRes));
+    await set({ externalChange: 'ignore' });
+    const forced = await js('__zmark.save(false, true)');
+    check('保存：原子写入内容正确且不留临时文件', forced !== false && fs.readFileSync(f3, 'utf8') === '我的修改\n' && !fs.readdirSync(path.dirname(f3)).some((n) => /\.tmp$/.test(n)), fs.readdirSync(path.dirname(f3)).join(','));
+    await set({ externalChange: 'auto' });
+
+    // 编码：GBK / UTF-16 文件按原编码读取，保存后为 UTF-8（内容为 GBK 编码的「# 中文标题 / 你好」，CRLF 换行）
+    const gbk = path.join(OUT, 'gbk.md');
+    fs.writeFileSync(gbk, Buffer.from([0x23, 0x20, 0xd6, 0xd0, 0xce, 0xc4, 0xb1, 0xea, 0xcc, 0xe2, 0x0d, 0x0a, 0x0d, 0x0a, 0xc4, 0xe3, 0xba, 0xc3]));
+    await js(`__zmark.openPath(${JSON.stringify(gbk)}, { force: true, skipConfirm: true })`);
+    await wait(300);
+    const gbkText = await text();
+    const gbkToast = await js('Array.from(document.querySelectorAll("#toast-root > *")).map((x) => x.textContent).join("|")');
+    check('编码：GBK 文件正确读取并提示', gbkText === '# 中文标题\n\n你好' && /GB18030/.test(gbkToast), JSON.stringify([gbkText, gbkToast]));
+    await js(`__zmark.editor.replaceAllText(${JSON.stringify('# 中文标题\n\n你好，世界')})`);
+    await js('__zmark.save(false, true)');
+    check('编码：保存为 UTF-8 并保留原换行符', fs.readFileSync(gbk, 'utf8') === '# 中文标题\r\n\r\n你好，世界', JSON.stringify(fs.readFileSync(gbk, 'utf8')));
+    const u16 = path.join(OUT, 'utf16.md');
+    fs.writeFileSync(u16, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('UTF-16 文档', 'utf16le')]));
+    await js(`__zmark.openPath(${JSON.stringify(u16)}, { force: true, skipConfirm: true })`);
+    await wait(300);
+    check('编码：UTF-16（BOM）文件正确读取', (await text()) === 'UTF-16 文档', await text());
+    await js(`__zmark.openPath(${JSON.stringify(f3)}, { force: true, skipConfirm: true })`);
+    await wait(200);
 
     await set({ recentLimit: 5 });
     for (let i = 0; i < 7; i++) await js(`window.zmark.invoke('app:addRecent', ${JSON.stringify(path.join(OUT, `recent-${i}.md`))})`);

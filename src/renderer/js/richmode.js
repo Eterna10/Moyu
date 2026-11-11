@@ -194,7 +194,7 @@
   const P = BlockEditor.prototype;
   const base = {};
   for (const name of ['activateRange', 'activateBlockEl', 'commit', 'applyEdit', 'replaceRange', 'revealMatch', 'toggleWrap', 'insertLink', 'insertText',
-    'scrollToCaret', 'emitSelection', 'setOptions', 'updateEditClass']) base[name] = P[name];
+    'scrollToCaret', 'emitSelection', 'setOptions', 'updateEditClass', 'blockFullySelected']) base[name] = P[name];
   const NORM = / (id|data-num|data-line|data-eq)="[^"]*"/g;
   const TYPING = new Set(['insertText', 'insertCompositionText', 'deleteContentBackward', 'deleteContentForward']);
 
@@ -598,6 +598,14 @@
     for (const k of ['strongMarker', 'emMarker']) if (k in o) this.prefs[k] = o[k];
     base.setOptions.call(this, o);
     if ('richMode' in o && this.active) this.refreshRich(this.hl.ta.selectionStart);
+  };
+
+  P.blockFullySelected = function () {
+    if (!this.rich) return base.blockFullySelected.call(this);
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !this.richEl.contains(sel.anchorNode)) return false;
+    const strip = (t) => t.replace(/\s/g, '');
+    return strip(sel.toString()).length >= strip(this.richHost().textContent).length;
   };
 
   P.updateEditClass = function () {

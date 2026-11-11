@@ -94,7 +94,7 @@ function buildMenu({ settings, send, newWindow, openRecent, clearRecent, plugins
         { label: '复制', role: 'copy' },
         { label: '粘贴', role: 'paste' },
         { label: '粘贴为纯文本', role: 'pasteAndMatchStyle', accelerator: 'CmdOrCtrl+Shift+V' },
-        { label: '全选', role: 'selectAll' },
+        c('全选', 'edit.selectAll', 'CmdOrCtrl+A'),
         { type: 'separator' },
         c('查找', 'edit.find', 'CmdOrCtrl+F'),
         c('替换', 'edit.replace', 'CmdOrCtrl+H'),

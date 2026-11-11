@@ -262,6 +262,9 @@
       loadText(r.content, { filePath: p, mtime: r.mtime });
       api.invoke('app:addRecent', p);
       rememberLastFile(p);
+      // 非 UTF-8 文件已按原编码正确读取；Moyu 统一以 UTF-8 保存
+      if (r.lossy) toast('此文件不是可识别的文本编码，内容可能显示为乱码；请不要保存，以免覆盖原文件', true);
+      else if (r.encoding && r.encoding !== 'UTF-8') toast(`此文件的编码为 ${r.encoding}，已正确读取；保存时将转换为 UTF-8`);
     } catch (e) {
       toast('无法打开文件：' + e.message, true);
     }
@@ -296,6 +299,19 @@
     if (!p || saveAs) {
       p = await api.invoke('dialog:save', { title: saveAs ? '另存为' : '保存', defaultPath: state.filePath || suggestedName() });
       if (!p) return false;
+    }
+    // 保存前确认磁盘上的文件没有被其它程序改动，避免（尤其是自动保存）悄悄覆盖别处的修改
+    if (p === state.filePath && state.mtime && state.settings.externalChange !== 'ignore') {
+      const m = await api.invoke('fs:stat', p);
+      if (m && Math.abs(m - state.mtime) >= 1) {
+        if (quiet) { checkExternalChange(); return false; } // 自动保存：改为询问用户，本次不写入
+        const r = await api.invoke('dialog:message', {
+          type: 'warning', buttons: ['覆盖', '取消'], defaultId: 1, cancelId: 1,
+          message: `“${docName()}”在打开后已被其他程序修改。`,
+          detail: '继续保存将覆盖磁盘上的那些修改。',
+        });
+        if (r !== 0) return false;
+      }
     }
     let text = getText();
     // 插件可在保存前改写内容（例如自动更新 Front Matter 中的修改时间）
@@ -1776,6 +1792,11 @@
       if (uiInputFocused() && !lastActionWasReplace()) document.execCommand('redo');
       else if (state.sourceMode) { sourceHistory('redo'); } else editor.redo();
     },
+    // 全选：输入框中由浏览器处理；源代码模式选中全部源码；否则选中整篇文档（多行块先选中块内内容）
+    'edit.selectAll': () => {
+      if (uiInputFocused() || state.sourceMode) { if (state.sourceMode && !uiInputFocused()) source.ta.focus(); document.execCommand('selectAll'); return; }
+      if (!editor.selectAll()) document.execCommand('selectAll');
+    },
     'edit.find': () => openFind(false),
     'edit.replace': () => openFind(true),
     'edit.findNext': () => findStep(1),
@@ -1859,7 +1880,12 @@
     }
     const fn = COMMANDS[cmd];
     if (!fn) { console.warn('unknown command', cmd); return undefined; }
-    if ($('.modal-mask') && !/^(file|help|plugins)\./.test(cmd)) return undefined;
+    if ($('.modal-mask') && !/^(file|help|plugins)\./.test(cmd)) {
+      // 对话框打开时文档命令不生效，但其中的输入框仍应支持撤销 / 重做 / 全选
+      const native = { 'edit.undo': 'undo', 'edit.redo': 'redo', 'edit.selectAll': 'selectAll' }[cmd];
+      if (native && uiInputFocused()) document.execCommand(native);
+      return undefined;
+    }
     // 在查找框等输入框中按 Ctrl+B / Ctrl+1 等不应修改文档
     if (/^(fmt|para)\./.test(cmd) && uiInputFocused()) return undefined;
     return fn(...args);
@@ -1925,6 +1951,17 @@
     $('#sb-typewriter').onclick = () => runCommand('view.typewriter');
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !$('#findbar').hidden && !$('.modal-mask')) closeFind();
+      // Ctrl+A：编辑框会自行处理这个按键，菜单快捷键收不到，因此在这里转给全选命令
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a' && !uiInputFocused() && !$('.modal-mask')) {
+        e.preventDefault();
+        runCommand('edit.selectAll');
+      }
+      // Ctrl+Z / Ctrl+Y：空的编辑框会吞掉按键却无内容可撤销（例如刚清空文档、刚用回车新建段落之后），
+      // 菜单快捷键因此收不到；统一转给编辑器自己的撤销 / 重做
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y') && !$('.modal-mask')) {
+        e.preventDefault();
+        runCommand(e.key.toLowerCase() === 'z' ? 'edit.undo' : 'edit.redo');
+      }
       // Ctrl+Shift+Z 重做（菜单中重做为 Ctrl+Y，这里补充常见的另一种快捷键）
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
