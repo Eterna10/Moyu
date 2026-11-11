@@ -924,7 +924,7 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
         await js('document.querySelector(".update-modal [data-act=download]").click()');
         await wait(500);
         const fb = await js('({ btn: document.querySelector(".update-modal [data-act=download]").textContent, msg: document.querySelector(".update-progress span").textContent, meta: document.querySelector(".update-modal .update-pkg").textContent })');
-        check('增量更新：更新包内容无效时拒绝，改为提供完整安装包', fb.btn === '下载完整安装包' && /内容无效/.test(fb.msg) && /Setup/.test(fb.meta) && !ofs.existsSync(staged), JSON.stringify(fb));
+        check('增量更新：更新包内容无效时拒绝，改为提供完整安装包', fb.btn === '下载完整安装包' && /内容无效/.test(fb.msg) && /Moyu-(Setup-)?9\.9\.9(-Portable)?\.exe/.test(fb.meta) && !ofs.existsSync(staged), JSON.stringify(fb));
         await key('Escape');
         await js("window.zmark.invoke('update:cancel')");
       } finally {
