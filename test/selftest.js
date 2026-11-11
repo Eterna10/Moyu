@@ -832,19 +832,121 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     const crypto = require('crypto');
     const payload = crypto.randomBytes(300 * 1024);
     const sha = 'sha256:' + crypto.createHash('sha256').update(payload).digest('hex');
+    // 增量更新包：最小的 asar 程序包（格式与 @electron/asar 相同），gzip 压缩
+    const zlib = require('zlib');
+    const makeAsar = (files) => {
+      const header = { files: {} };
+      const bufs = [];
+      let offset = 0;
+      for (const [p, content] of Object.entries(files)) {
+        const b = Buffer.from(content);
+        const parts = p.split('/');
+        let node = header;
+        for (const d of parts.slice(0, -1)) { node.files[d] = node.files[d] || { files: {} }; node = node.files[d]; }
+        node.files[parts[parts.length - 1]] = { size: b.length, offset: String(offset) };
+        offset += b.length;
+        bufs.push(b);
+      }
+      const json = Buffer.from(JSON.stringify(header));
+      const padded = json.length + ((4 - (json.length % 4)) % 4);
+      const hp = Buffer.alloc(8 + padded);
+      hp.writeUInt32LE(4 + padded, 0);
+      hp.writeUInt32LE(json.length, 4);
+      json.copy(hp, 8);
+      const sp = Buffer.alloc(8);
+      sp.writeUInt32LE(4, 0);
+      sp.writeUInt32LE(hp.length, 4);
+      return Buffer.concat([sp, hp, ...bufs]);
+    };
+    const patchOf = (version) => zlib.gzipSync(makeAsar({ 'package.json': JSON.stringify({ name: 'moyu', version }), 'src/main/main.js': '// main', 'src/renderer/index.html': '<!doctype html>' }));
+    const patches = { good: patchOf('9.9.9'), bad: patchOf('1.2.3') };
+    const patchName = `Moyu-9.9.9-app-electron-${process.versions.electron}.asar.gz`;
+    const shaOf = (b) => 'sha256:' + crypto.createHash('sha256').update(b).digest('hex');
     let mode = 'newer';
     const server = http.createServer((req, res) => {
-      if (req.url.startsWith('/dl/')) { res.writeHead(200, { 'Content-Length': payload.length }); res.end(payload); return; }
+      if (req.url.startsWith('/dl/')) {
+        const body = /\.asar\.gz$/.test(req.url) ? patches[mode === 'badpatch' ? 'bad' : 'good'] : payload;
+        res.writeHead(200, { 'Content-Length': body.length });
+        res.end(body);
+        return;
+      }
       if (mode === '404') { res.writeHead(404); res.end('{}'); return; }
       const tag = mode === 'same' ? 'v1.0.0' : 'v9.9.9';
       const asset = (name) => ({ name, size: payload.length, browser_download_url: `http://127.0.0.1:${port}/dl/${name}`, digest: mode === 'tampered' ? 'sha256:' + '0'.repeat(64) : sha });
+      const patch = (name, b) => ({ name, size: b.length, browser_download_url: `http://127.0.0.1:${port}/dl/${name}`, digest: shaOf(b) });
+      const pb = patches[mode === 'badpatch' ? 'bad' : 'good'];
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ tag_name: tag, name: 'Moyu ' + tag, body: '## 新功能\n\n- 测试更新说明', html_url: 'https://github.com/Eterna10/Moyu/releases/tag/' + tag, published_at: '2026-11-10T00:00:00Z',
-        assets: [asset('Moyu-Setup-9.9.9.exe'), asset('Moyu-9.9.9-Portable.exe')] }));
+        assets: [patch('Moyu-9.9.9-app-electron-1.0.0.asar.gz', pb), asset('Moyu-Setup-9.9.9.exe'), asset('Moyu-9.9.9-Portable.exe'), patch(patchName, pb)] }));
     });
     await new Promise((r) => server.listen(0, '127.0.0.1', r));
     const port = server.address().port;
     process.env.MOYU_UPDATE_API = `http://127.0.0.1:${port}`;
+
+    // 增量更新：只下载 app.asar 更新包，退出后由辅助脚本替换
+    async function patchTests() {
+      const ofs = require('original-fs');
+      const { spawn } = require('child_process');
+      const updater = require(path.join(ROOT, 'src', 'main', 'updater.js'));
+      const pdir = path.join(app.getPath('temp'), 'moyu-patch-test');
+      ofs.rmSync(pdir, { recursive: true, force: true });
+      ofs.mkdirSync(pdir, { recursive: true });
+      mode = 'newer';
+      let r = await js("window.zmark.invoke('update:check')");
+      check('增量更新：未指定可写的程序目录时不提供更新包', r.ok && !r.patch && !!r.asset);
+      process.env.MOYU_PATCH_DIR = pdir;
+      try {
+        r = await js("window.zmark.invoke('update:check')");
+        check('增量更新：只选择与本机 Electron 版本一致的更新包', !!r.patch && r.patch.name === patchName && !!r.asset, JSON.stringify(r.patch));
+
+        // 对话框：优先下载增量更新包，完成后「重启并更新」
+        await js('__zmark.runCommand("help.checkUpdate")');
+        await wait(600);
+        check('增量更新：对话框显示更新包大小', /增量更新/.test(await js('document.querySelector(".update-modal .update-pkg").textContent')));
+        await js('document.querySelector(".update-modal [data-act=download]").click()');
+        for (let i = 0; i < 50 && !(await js('/校验通过|失败/.test((document.querySelector(".update-progress span")||{}).textContent || "")')); i++) await wait(100);
+        const btn = await js('document.querySelector(".update-modal [data-act=download]").textContent');
+        check('增量更新：下载并校验后显示「重启并更新」', btn === '重启并更新', btn);
+        await shot('26-增量更新.png');
+        await js('document.querySelector(".update-modal [data-act=download]").click()');
+        await wait(500);
+        const staged = path.join(pdir, 'app-update.asar');
+        const pkg = ofs.existsSync(staged) && updater.asarPackage(ofs.readFileSync(staged));
+        check('增量更新：解压并校验后放到程序目录等待替换', !!pkg && pkg.version === '9.9.9' && !(await js('!!document.querySelector(".update-modal")')), JSON.stringify(pkg));
+
+        // 内容不对（版本号不符）的更新包：拒绝，并改为提供完整安装包
+        mode = 'badpatch';
+        ofs.rmSync(staged, { force: true });
+        await js('__zmark.runCommand("help.checkUpdate")');
+        await wait(600);
+        await js('document.querySelector(".update-modal [data-act=download]").click()');
+        for (let i = 0; i < 50 && !(await js('/校验通过|失败/.test((document.querySelector(".update-progress span")||{}).textContent || "")')); i++) await wait(100);
+        await js('document.querySelector(".update-modal [data-act=download]").click()');
+        await wait(500);
+        const fb = await js('({ btn: document.querySelector(".update-modal [data-act=download]").textContent, msg: document.querySelector(".update-progress span").textContent, meta: document.querySelector(".update-modal .update-pkg").textContent })');
+        check('增量更新：更新包内容无效时拒绝，改为提供完整安装包', fb.btn === '下载完整安装包' && /内容无效/.test(fb.msg) && /Setup/.test(fb.meta) && !ofs.existsSync(staged), JSON.stringify(fb));
+        await key('Escape');
+        await js("window.zmark.invoke('update:cancel')");
+      } finally {
+        delete process.env.MOYU_PATCH_DIR;
+        mode = 'newer';
+      }
+
+      // 辅助脚本：等待 Moyu 进程结束后替换 app.asar
+      const dst = path.join(pdir, 'app.asar');
+      const src = path.join(pdir, 'app-update.asar');
+      ofs.writeFileSync(dst, 'OLD');
+      ofs.writeFileSync(src, 'NEW');
+      const env = Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' });
+      const dummy = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 800)'], { env, stdio: 'ignore' });
+      let dummyExit = 0;
+      dummy.on('exit', () => { dummyExit = Date.now(); });
+      const helper = spawn(process.execPath, [updater.writeHelper(), String(dummy.pid), src, dst, path.join(pdir, 'log.txt')], { env, stdio: 'ignore' });
+      const helperExit = await new Promise((r) => helper.on('exit', () => r(Date.now())));
+      const swapped = ofs.existsSync(dst) && ofs.readFileSync(dst, 'utf8') === 'NEW' && !ofs.existsSync(src) && !ofs.existsSync(dst + '.old');
+      check('增量更新：辅助脚本等进程退出后替换 app.asar', swapped && dummyExit > 0 && helperExit >= dummyExit, JSON.stringify({ swapped, wait: helperExit - dummyExit }));
+      ofs.rmSync(pdir, { recursive: true, force: true });
+    }
     try {
       let r = await js("window.zmark.invoke('update:check')");
       // 便携版应选择 Portable 安装包，安装版与开发模式选择 Setup 安装包
@@ -910,6 +1012,7 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
       check('更新：点击状态栏「新版本」打开更新对话框', (await badge()).modal);
       await key('Escape');
       await js('__zmark.setSetting({ skippedVersion: "" })');
+      await patchTests();
       const bad = await js("window.zmark.invoke('update:download', { name: 'x.exe', size: 1, url: 'http://evil.example.com/x.exe' }).then(() => 'ok', (e) => e.message)");
       check('更新：拒绝非 HTTPS 的下载地址', /无效的下载地址/.test(bad), bad);
       await js('document.querySelector("#sb-update").hidden = true');

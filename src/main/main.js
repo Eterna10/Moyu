@@ -321,7 +321,11 @@ function registerIpc() {
   const h = (ch, fn) => ipcMain.handle(ch, fn);
 
   appearance.register(h, { getSettings: () => settings });
-  updater.register(h, { root: ROOT, getSettings: () => settings, saveSettings, apiBase: () => (SELF_TEST && process.env.MOYU_UPDATE_API) || 'https://api.github.com' });
+  updater.register(h, {
+    root: ROOT, getSettings: () => settings, saveSettings, selfTest: SELF_TEST,
+    apiBase: () => (SELF_TEST && process.env.MOYU_UPDATE_API) || 'https://api.github.com',
+    patchDir: () => process.env.MOYU_PATCH_DIR || null, // 仅在自检时使用
+  });
   history.register(h, { getSettings: () => settings });
   plugins.register(h, { root: ROOT, getSettings: () => settings, saveSettings, refreshMenu, windows });
 

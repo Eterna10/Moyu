@@ -18,7 +18,7 @@
     "start": "electron .",
     "test": "electron . --self-test",
     "pack": "node tools/pack.js",
-    "dist": "node tools/pack.js && electron-builder --win nsis portable --prepackaged dist/Moyu-win32-x64"
+    "dist": "node tools/pack.js && electron-builder --win nsis portable --prepackaged dist/Moyu-win32-x64 && node tools/make-update.js"
   },
   "build": {
     "appId": "com.zrid.zmark",

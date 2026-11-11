@@ -411,7 +411,8 @@
       else {
         body = `<p class="update-meta">当前版本 ${esc(r.current)} → <b>最新版本 ${esc(r.latest)}</b>${r.publishedAt ? ' · 发布于 ' + esc(r.publishedAt.slice(0, 10)) : ''}</p>
           <div class="update-notes markdown-body">${r.notes ? ctx.renderMarkdown(r.notes) : '（无更新说明）'}</div>
-          ${r.asset ? `<p class="update-meta">安装包：${esc(r.asset.name)}（${fmtMB(r.asset.size)}）${r.asset.digest ? ' · 下载后校验 SHA-256' : ''}</p>` : '<p class="update-meta">该版本没有适合当前运行方式的安装包，请到发布页下载。</p>'}
+          ${r.patch ? `<p class="update-meta update-pkg">⚡ 增量更新：${esc(r.patch.name)}（${fmtMB(r.patch.size)}${r.asset ? `，无需下载 ${fmtMB(r.asset.size)} 的完整安装包` : ''}）${r.patch.digest ? ' · 下载后校验 SHA-256' : ''}</p>`
+            : r.asset ? `<p class="update-meta update-pkg">安装包：${esc(r.asset.name)}（${fmtMB(r.asset.size)}）${r.asset.digest ? ' · 下载后校验 SHA-256' : ''}</p>` : '<p class="update-meta">该版本没有适合当前运行方式的安装包，请到发布页下载。</p>'}
           <div class="update-progress" hidden><div class="bar"><i></i></div><span></span></div>`;
       }
       const newer = r.ok && r.newer;
@@ -419,7 +420,7 @@
           ${r.ok && r.url ? '<button class="text-btn" data-act="page">查看发布页</button>' : ''}<span style="flex:1"></span>
           ${newer ? '<button class="text-btn" data-act="skip" title="不再自动提醒这个版本，之后仍可在状态栏或「帮助 → 检查更新」中更新">跳过此版本</button>' : ''}
           <button class="text-btn" data-act="close">${newer ? '取消' : '关闭'}</button>
-          ${newer && r.asset ? '<button class="text-btn primary" data-act="download">立即更新</button>' : ''}</div>`,
+          ${newer && (r.patch || r.asset) ? '<button class="text-btn primary" data-act="download">立即更新</button>' : ''}</div>`,
       (el, close) => {
         el.classList.add('update-modal');
         const prog = $('.update-progress', el);
@@ -437,34 +438,58 @@
         if (page) page.onclick = () => api.invoke('shell:open', r.url);
         const dl = $('[data-act=download]', el);
         if (!dl) return;
-        dl.onclick = async () => {
+        const errText = (err) => String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+        let pkg = r.patch || r.asset; // 优先增量更新包；它失败时改用完整安装包
+        // 增量更新失败后改为下载完整安装包
+        const fallBack = (msg) => {
+          pkg = r.asset;
+          $('span', prog).textContent = msg + (pkg ? '，可改为下载完整安装包' : '');
+          const meta = $('.update-pkg', el);
+          if (meta && pkg) meta.textContent = `安装包：${pkg.name}（${fmtMB(pkg.size)}）${pkg.digest ? ' · 下载后校验 SHA-256' : ''}`;
+          dl.disabled = !pkg;
+          dl.textContent = '下载完整安装包';
+          dl.onclick = startDownload;
+        };
+        async function startDownload() {
           dl.disabled = true;
           dl.textContent = '正在下载…';
           if (skip) skip.hidden = true;
           prog.hidden = false;
+          $('i', prog).style.width = '0';
+          $('span', prog).textContent = '';
           let res;
           try {
-            res = await api.invoke('update:download', r.asset);
+            res = await api.invoke('update:download', pkg);
           } catch (err) {
             showCheckResult(r);
             dl.disabled = false;
             dl.textContent = '重新下载';
-            $('span', prog).textContent = '下载失败：' + String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+            $('span', prog).textContent = '下载失败：' + errText(err);
             return;
           }
           showCheckResult(r);
           if (res.canceled) return;
           $('span', prog).textContent = res.verified ? '下载完成，SHA-256 校验通过' : '下载完成';
-          const kind = r.kind;
+          const isPatch = pkg === r.patch;
           dl.disabled = false;
-          dl.textContent = kind === 'setup' ? '退出并安装' : '打开所在文件夹';
+          dl.textContent = isPatch ? '重启并更新' : r.kind === 'setup' ? '退出并安装' : '打开所在文件夹';
           dl.onclick = async () => {
-            const done = await api.invoke('update:install', res.file);
-            if (done.kind === 'portable') ctx.toast('新版便携版已放到当前程序旁边，关闭本程序后运行新版本即可');
+            dl.disabled = true;
+            let done;
+            try {
+              done = await api.invoke('update:install', res.file, { version: r.latest });
+            } catch (err) {
+              if (isPatch) fallBack('增量更新失败：' + errText(err));
+              else { dl.disabled = false; $('span', prog).textContent = '安装失败：' + errText(err); }
+              return;
+            }
+            if (done.kind === 'patch') ctx.toast(`Moyu 将重启并更新到 ${done.version}`);
+            else if (done.kind === 'portable') ctx.toast('新版便携版已放到当前程序旁边，关闭本程序后运行新版本即可');
             else if (done.kind === 'setup') ctx.toast('Moyu 将退出并启动安装程序');
             close();
           };
-        };
+        }
+        dl.onclick = startDownload;
       });
     }
 
