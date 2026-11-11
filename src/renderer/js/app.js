@@ -991,7 +991,7 @@
           ${row('每个文件最多保留', '', num('historyMax', [[20, '20 个'], [50, '50 个'], [100, '100 个'], [200, '200 个']]), 'historyEnabled')}
           <h4 class="pref-h">更新</h4>
           ${row(`当前版本 ${esc(state.info.version || '')}`, '从 GitHub 发布页获取新版本，下载后校验文件完整性', '<button class="text-btn" data-act="check-update">检查更新</button>')}
-          ${row('启动时自动检查更新', '每天最多检查一次，发现新版本时在状态栏提示', check('autoCheckUpdate'))}
+          ${row('启动时自动检查更新', '每次启动时检查，状态显示在状态栏；发现新版本时弹窗，可选择立即更新、跳过此版本或取消', check('autoCheckUpdate'))}
           ${row('下载加速地址（可选）', '下载缓慢时可填写 GitHub 加速服务的前缀，下载地址会拼接在其后；留空则直接下载', text('updateMirror', '例如 https://example.com/'))}
         </section>
 
@@ -1974,13 +1974,13 @@
     await pluginHost.load();
 
     extras = ZExtras.init({
-      api, state, toast, showModal, runCommand, openPath, setText, getText, docName, renderMarkdown,
+      api, state, toast, showModal, runCommand, openPath, setText, getText, docName, renderMarkdown, setSetting,
       editor: () => editor,
       focusEditor: () => { if (state.sourceMode) source.focus(); else editor.focusEditor(); },
       pluginCommands: () => [...pluginHost.commands.values()].map((c) => Object.assign({}, c, { pluginName: (pluginHost.records.get(c.pluginId) || { manifest: {} }).manifest.name || c.pluginId })),
     });
     editor.editorEl.addEventListener('keydown', (e) => extras.slashKeydown(e), true);
-    $('#sb-update').onclick = () => extras.showUpdate(extras.lastUpdate());
+    $('#sb-update').onclick = () => extras.updateBadgeClick();
     api.on('plugins-changed', () => pluginHost.reload().then(refreshPluginPane));
 
     const initial = await api.invoke('win:initial');
@@ -1993,11 +1993,9 @@
     } else loadText('', {});
     if (state.settings.lastFolder) loadFolder(state.settings.lastFolder); else renderTree(null);
 
+    // 启动后自动检查更新：结果显示在状态栏，发现新版本时弹窗询问（只在程序启动时的首个窗口检查）
+    if (!state.selfTest && initial.startup && state.settings.autoCheckUpdate) setTimeout(() => extras.checkUpdate(true), 2500);
     // 供自检脚本使用
-    // 启动后自动检查更新（每天最多一次）
-    if (!state.selfTest && state.settings.autoCheckUpdate && Date.now() - (state.settings.lastUpdateCheck || 0) > 20 * 3600 * 1000) {
-      setTimeout(() => extras.checkUpdate(true), 6000);
-    }
     window.__zmark = { extras, refreshFonts, editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, exportDoc, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
     document.body.dataset.ready = '1';
     hideSplash();

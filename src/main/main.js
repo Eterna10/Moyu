@@ -103,6 +103,7 @@ const DEFAULTS = {
   // 更新与历史版本
   autoCheckUpdate: true,
   lastUpdateCheck: 0,
+  skippedVersion: '', // 用户选择「跳过此版本」的版本号，自动检查时不再弹窗
   updateMirror: '',
   historyEnabled: true,
   historyMax: 50,

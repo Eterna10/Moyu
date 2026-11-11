@@ -445,9 +445,18 @@ body.has-bg.bg-panels #sidebar, body.has-bg.bg-panels #statusbar {
 .font-sample { font-size: 17px; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .font-name { font-size: 13px; text-align: right; }
 .font-name small { display: block; color: var(--muted); font-size: 11.5px; }
-.status-btn.update-btn { color: #fff; background: #2da44e; }
-.status-btn.update-btn:hover { background: #2c974b; color: #fff; }
+/* 状态栏更新状态：检查中 / 已是最新 / 失败为普通文字，有新版本与下载中高亮 */
+.status-btn.update-btn { white-space: nowrap; }
+.status-btn.update-btn[data-state=latest] { color: var(--muted); }
+.status-btn.update-btn[data-state=error] { color: #d4881c; }
+.status-btn.update-btn[data-state=checking], .status-btn.update-btn[data-state=downloading] { cursor: default; }
+.status-btn.update-btn[data-state=checking]:hover { background: transparent; color: var(--text-soft); }
+.status-btn.update-btn[data-state=newer], .status-btn.update-btn[data-state=downloading] { color: #fff; background: #2da44e; }
+.status-btn.update-btn[data-state=newer]:hover { background: #2c974b; color: #fff; }
 .status-btn.update-btn[hidden] { display: none; }
+.update-btn .spin { display: inline-block; font-style: normal; animation: update-spin 0.9s linear infinite; }
+@keyframes update-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .update-btn .spin { animation: none; } }
 
 /* ---------- 命令面板 / 快速打开 ---------- */
 .palette-mask { position: fixed; inset: 0; z-index: 150; background: rgba(0, 0, 0, 0.18); display: flex; justify-content: center; padding-top: 10vh; }
@@ -506,6 +515,7 @@ body.has-bg.bg-panels #sidebar, body.has-bg.bg-panels #statusbar {
 .update-meta { color: var(--text-soft); font-size: 13px; }
 .update-notes { max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px 16px; font-size: 14px; }
 .update-progress { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 12.5px; color: var(--text-soft); }
+.update-progress[hidden] { display: none; }
 .update-progress .bar { height: 6px; border-radius: 3px; background: var(--bg-soft); overflow: hidden; border: 1px solid var(--border); }
 .update-progress .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.15s; }
 

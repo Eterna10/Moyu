@@ -351,24 +351,59 @@
     /* ======================= 在线更新 ======================= */
 
     let lastCheck = null;
+    let badgeTimer = 0;
+    const hhmm = () => new Date().toTimeString().slice(0, 5);
 
-    function setUpdateBadge(r) {
+    // 状态栏的更新状态：checking 检查中 / latest 已是最新 / newer 有新版本 / error 失败 / downloading 下载中
+    function setUpdateBadge(st, text, title) {
       const b = $('#sb-update');
       if (!b) return;
-      b.hidden = !(r && r.ok && r.newer);
-      if (!b.hidden) { b.textContent = `⬆ 新版本 ${r.latest}`; b.title = `Moyu ${r.latest} 已发布，点击查看`; }
+      clearTimeout(badgeTimer);
+      b.hidden = false;
+      b.dataset.state = st;
+      b.innerHTML = text;
+      b.title = title || '';
     }
 
-    async function checkUpdate(silent) {
+    function showCheckResult(r) {
+      if (!r) return;
+      if (!r.ok) setUpdateBadge('error', '⚠ 检查更新失败', `${r.error || '未知错误'}\n点击重试`);
+      else if (r.newer) setUpdateBadge('newer', `⬆ 新版本 ${esc(r.latest)}`, `Moyu ${r.latest} 已发布（当前 ${r.current}），点击查看并更新`);
+      else {
+        const title = `当前版本 ${r.current} 已是最新（检查于 ${hhmm()}）\n点击重新检查`;
+        setUpdateBadge('latest', '✓ 已是最新', title);
+        badgeTimer = setTimeout(() => setUpdateBadge('latest', `✓ v${esc(r.current)}`, title), 8000); // 稍后收起为版本号
+      }
+    }
+
+    function updateBadgeClick() {
+      const st = ($('#sb-update') || {}).dataset.state;
+      if (st === 'newer') showUpdate(lastCheck);
+      else if (st !== 'checking' && st !== 'downloading') checkUpdate(false);
+    }
+
+    let checking = null;
+    function checkUpdate(silent) {
+      if (checking) return checking.then((r) => { if (!silent) showUpdate(r); return r; });
+      setUpdateBadge('checking', '<i class="spin">↻</i> 正在检查更新…', '正在从 GitHub 检查新版本');
+      checking = doCheck(silent).finally(() => { checking = null; });
+      return checking;
+    }
+
+    async function doCheck(silent) {
       const r = await api.invoke('update:check').catch((e) => ({ ok: false, error: e.message }));
       lastCheck = r;
-      setUpdateBadge(r);
-      if (silent) { if (r.ok && r.newer) ctx.toast(`发现新版本 Moyu ${r.latest}，点击状态栏的「新版本」查看`); return r; }
-      showUpdate(r);
+      showCheckResult(r);
+      if (!silent) showUpdate(r);
+      else if (r.ok && r.newer && state.settings.skippedVersion !== r.latest) {
+        // 自动检查发现新版本：弹窗询问（已跳过的版本不再弹出，状态栏仍显示）；正有其它对话框时改为提示
+        if (document.querySelector('.modal-mask')) ctx.toast(`发现新版本 Moyu ${r.latest}，点击状态栏的「新版本」查看`);
+        else showUpdate(r, { prompt: true });
+      }
       return r;
     }
 
-    function showUpdate(r) {
+    function showUpdate(r, opts = {}) {
       const fmtMB = (n) => (n / 1048576).toFixed(1) + ' MB';
       let body;
       if (!r.ok) body = `<p>检查更新失败：${esc(r.error)}</p><p class="update-meta">当前版本 ${esc(r.current || '')} · 仓库 ${esc(r.repo || '')}</p>`;
@@ -379,14 +414,25 @@
           ${r.asset ? `<p class="update-meta">安装包：${esc(r.asset.name)}（${fmtMB(r.asset.size)}）${r.asset.digest ? ' · 下载后校验 SHA-256' : ''}</p>` : '<p class="update-meta">该版本没有适合当前运行方式的安装包，请到发布页下载。</p>'}
           <div class="update-progress" hidden><div class="bar"><i></i></div><span></span></div>`;
       }
-      ctx.showModal(`<h3>检查更新</h3>${body}<div class="actions">
+      const newer = r.ok && r.newer;
+      ctx.showModal(`<h3>${opts.prompt ? '🎉 发现新版本' : '检查更新'}</h3>${body}<div class="actions">
           ${r.ok && r.url ? '<button class="text-btn" data-act="page">查看发布页</button>' : ''}<span style="flex:1"></span>
-          <button class="text-btn" data-act="close">${r.ok && r.newer ? '稍后' : '关闭'}</button>
-          ${r.ok && r.newer && r.asset ? '<button class="text-btn primary" data-act="download">下载并安装</button>' : ''}</div>`,
+          ${newer ? '<button class="text-btn" data-act="skip" title="不再自动提醒这个版本，之后仍可在状态栏或「帮助 → 检查更新」中更新">跳过此版本</button>' : ''}
+          <button class="text-btn" data-act="close">${newer ? '取消' : '关闭'}</button>
+          ${newer && r.asset ? '<button class="text-btn primary" data-act="download">立即更新</button>' : ''}</div>`,
       (el, close) => {
         el.classList.add('update-modal');
         const prog = $('.update-progress', el);
         $('[data-act=close]', el).onclick = async () => { await api.invoke('update:cancel'); close(); };
+        const skip = $('[data-act=skip]', el);
+        if (skip) {
+          skip.onclick = async () => {
+            ctx.setSetting({ skippedVersion: r.latest });
+            await api.invoke('update:cancel');
+            close();
+            ctx.toast(`已跳过 Moyu ${r.latest}，有更新的版本时会再次提醒`);
+          };
+        }
         const page = $('[data-act=page]', el);
         if (page) page.onclick = () => api.invoke('shell:open', r.url);
         const dl = $('[data-act=download]', el);
@@ -394,16 +440,19 @@
         dl.onclick = async () => {
           dl.disabled = true;
           dl.textContent = '正在下载…';
+          if (skip) skip.hidden = true;
           prog.hidden = false;
           let res;
           try {
             res = await api.invoke('update:download', r.asset);
           } catch (err) {
+            showCheckResult(r);
             dl.disabled = false;
             dl.textContent = '重新下载';
             $('span', prog).textContent = '下载失败：' + String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
             return;
           }
+          showCheckResult(r);
           if (res.canceled) return;
           $('span', prog).textContent = res.verified ? '下载完成，SHA-256 校验通过' : '下载完成';
           const kind = r.kind;
@@ -420,6 +469,7 @@
     }
 
     api.on('update-progress', (p) => {
+      if (!p.done && p.total) setUpdateBadge('downloading', `⬇ 下载更新 ${Math.floor((p.received / p.total) * 100)}%`, '正在下载新版本');
       const prog = $('.update-modal .update-progress');
       if (!prog) return;
       const pct = p.total ? Math.min(100, (p.received / p.total) * 100) : 0;
@@ -429,7 +479,7 @@
 
     return {
       openPalette, closePalette, checkSlash, slashKeydown, closeSlash, slashOpen: () => !!slash, slashItems: () => (slash ? slash.items.map((x) => x.label) : []),
-      openLightbox, openHistory, checkUpdate, showUpdate, lastUpdate: () => lastCheck, fuzzy,
+      openLightbox, openHistory, checkUpdate, showUpdate, updateBadgeClick, lastUpdate: () => lastCheck, fuzzy,
     };
   }
 
