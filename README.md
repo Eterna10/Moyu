@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.6.3-blue.svg" alt="Version"></a>
+  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.6.4-blue.svg" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg" alt="Platform">
   <img src="https://img.shields.io/badge/electron-45.2.1-47848F.svg?logo=electron" alt="Electron">
@@ -25,8 +25,8 @@ Moyu 是一款功能对标 Typora 的桌面 Markdown 编辑器：文档始终以
 
 | 版本 | 文件名 | 说明 |
 | --- | --- | --- |
-| **安装版（推荐）** | `Moyu-Setup-1.6.3.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
-| **便携版** | `Moyu-1.6.3-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
+| **安装版（推荐）** | `Moyu-Setup-1.6.4.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
+| **便携版** | `Moyu-1.6.4-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
 
 > **自动更新**：Moyu 每次启动时会检查本仓库的最新发布版本，检查状态（检查中 / 已是最新 / 发现新版本 / 检查失败）显示在底部状态栏；发现新版本时弹窗，可选择「立即更新」「跳过此版本」或「取消」。也可以通过「帮助 → 检查更新」手动检查；安装版通常只需下载约 5 MB 的增量更新包（而不是 120 MB 的完整安装包），下载后校验 SHA-256，重启即完成更新；便携版或 Electron 版本变化时下载完整安装包。
 >
