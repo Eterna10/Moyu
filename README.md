@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.6.1-blue.svg" alt="Version"></a>
+  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.6.2-blue.svg" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg" alt="Platform">
   <img src="https://img.shields.io/badge/electron-45.2.1-47848F.svg?logo=electron" alt="Electron">
@@ -25,8 +25,8 @@ Moyu 是一款功能对标 Typora 的桌面 Markdown 编辑器：文档始终以
 
 | 版本 | 文件名 | 说明 |
 | --- | --- | --- |
-| **安装版（推荐）** | `Moyu-Setup-1.6.1.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
-| **便携版** | `Moyu-1.6.1-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
+| **安装版（推荐）** | `Moyu-Setup-1.6.2.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
+| **便携版** | `Moyu-1.6.2-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
 
 > **自动更新**：从 1.6.0 起，Moyu 会在启动时（每天最多一次）检查本仓库的最新发布版本，也可以通过「帮助 → 检查更新」手动检查；下载后会校验 SHA-256，安装版在退出后自动启动安装程序。
 >
@@ -143,7 +143,7 @@ npm run dist    # 打包并生成安装版与便携版至 dist/release/
 
 ```
 Moyu/
-├── build/            构建图标资源（icon.ico, icon.png, icon-source.webp）
+├── build/            构建图标资源（应用图标 icon.ico / icon.png / icon-source.webp，.md 文件图标 md-file.ico）
 ├── docs/             项目文档与截图
 │   ├── 插件开发指南.md
 │   ├── 设计文档.md
@@ -155,7 +155,7 @@ Moyu/
 │   ├── preload.js    安全桥接脚本（contextBridge 隔离）
 │   └── renderer/     渲染进程（编辑器内核、排版渲染、UI 界面、快捷键）
 ├── test/             端到端自动化测试脚本（selftest.js）
-├── tools/            打包构建工具与图标脚本
+├── tools/            打包构建工具与图标脚本（make-icon.js、make-file-icon.js）
 ├── package.json      项目配置与依赖声明
 ├── LICENSE           开源许可证（MIT）
 └── 启动Moyu.bat       Windows 开发模式快捷启动脚本
