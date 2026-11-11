@@ -342,7 +342,7 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     await themeFontTests();
     await updateTests();
     await featureTests();
-    await require('./workspace-tests.js')({ js, wc, check, wait, key, type, text, val, OUT, shot, app });
+    await require('./workspace-tests.js')({ js, wc, win, check, wait, key, type, text, val, OUT, shot, app });
 
     /* ---------- 偏好设置选项 ---------- */
     await settingsTests();
@@ -1227,12 +1227,15 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     // 图片放大：双击图片
     await js(`__zmark.loadText(${JSON.stringify('# 图片\n\n![logo](assets/pic.png)')}, {filePath: ${JSON.stringify(DOC)}})`);
     await wait(400);
+    // 图片为懒加载：自检窗口被其它窗口遮住时 Chromium 会推迟加载，这里明确要求加载并等待完成
+    await js('document.querySelectorAll("#write img").forEach((im) => { im.loading = "eager"; })');
+    for (let i = 0; i < 30 && !(await js('document.querySelector("#write img").complete && document.querySelector("#write img").naturalWidth > 0')); i++) await wait(100);
     const r = await js('(() => { const b = document.querySelector("#write img").getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()');
     await clickAt(r.x, r.y);
     await wait(60);
     await clickAt(r.x, r.y);
     await wait(300);
-    check('图片放大：双击图片打开预览', await js('!!document.querySelector(".lightbox img")'));
+    check('图片放大：双击图片打开预览', await js('!!document.querySelector(".lightbox img")'), JSON.stringify(r));
     await key('Escape');
     check('图片放大：Esc 关闭', !(await js('!!document.querySelector(".lightbox")')));
     await key('Escape');

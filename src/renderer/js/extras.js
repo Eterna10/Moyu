@@ -14,7 +14,7 @@
     ['file.save', '保存', 'Ctrl+S'], ['file.saveAs', '另存为…', 'Ctrl+Shift+S'], ['file.toggleAutoSave', '开关自动保存', ''],
     ['file.history', '历史版本…', '', 'history version 恢复'], ['file.exportHtml', '导出 HTML…', '', 'export'], ['file.exportPdf', '导出 PDF…', 'Ctrl+Shift+P', 'export'],
     ['file.reveal', '在资源管理器中显示', ''], ['file.preferences', '偏好设置…', 'Ctrl+,', 'settings 设置'], ['file.preferencesTheme', '主题与外观…', '', 'theme background 背景 字体'],
-    ['edit.undo', '撤销', 'Ctrl+Z'], ['edit.redo', '重做', 'Ctrl+Y'], ['edit.selectAll', '全选', 'Ctrl+A', 'select all'], ['edit.findInFolder', '在文件夹中查找…', 'Ctrl+Shift+F', 'search grep 全文搜索'], ['edit.copyRich', '复制为富文本（Word、邮件、公众号）', 'Ctrl+Shift+C', 'copy rich word wechat'], ['edit.copyHtml', '复制为 HTML 代码', '', 'copy html'], ['edit.copyMarkdown', '复制 Markdown 源码', '', 'copy markdown'], ['edit.pastePlain', '粘贴为纯文本', 'Ctrl+Shift+V', 'paste plain'], ['file.recover', '恢复未保存的文档…', '', 'recover 崩溃 恢复'], ['edit.find', '查找', 'Ctrl+F', 'search'], ['edit.replace', '替换', 'Ctrl+H'],
+    ['edit.undo', '撤销', 'Ctrl+Z'], ['edit.redo', '重做', 'Ctrl+Y'], ['edit.selectAll', '全选', 'Ctrl+A', 'select all'], ['edit.findInFolder', '在文件夹中查找…', 'Ctrl+Shift+F', 'search grep 全文搜索'], ['edit.copyRich', '复制为富文本（Word、邮件、公众号）', 'Ctrl+Shift+C', 'copy rich word wechat'], ['edit.copyHtml', '复制为 HTML 代码', '', 'copy html'], ['edit.copyMarkdown', '复制 Markdown 源码', '', 'copy markdown'], ['edit.pastePlain', '粘贴为纯文本', 'Ctrl+Shift+V', 'paste plain'], ['file.recover', '恢复未保存的文档…', '', 'recover 崩溃 恢复'], ['edit.gotoHeading', '跳转到标题…', 'Ctrl+G', 'goto heading outline 大纲'], ['edit.find', '查找', 'Ctrl+F', 'search'], ['edit.replace', '替换', 'Ctrl+H'],
     ['para.h1', '一级标题', 'Ctrl+1', 'heading'], ['para.h2', '二级标题', 'Ctrl+2', 'heading'], ['para.h3', '三级标题', 'Ctrl+3', 'heading'],
     ['para.h4', '四级标题', 'Ctrl+4'], ['para.h5', '五级标题', 'Ctrl+5'], ['para.h6', '六级标题', 'Ctrl+6'], ['para.p', '正文段落', 'Ctrl+0', 'paragraph'],
     ['para.table', '插入表格', 'Ctrl+T', 'table'], ['para.code', '插入代码块', 'Ctrl+Shift+K', 'code'], ['para.math', '插入公式块', 'Ctrl+Shift+M', 'math latex'],
@@ -89,19 +89,28 @@
       closePalette();
       const mask = document.createElement('div');
       mask.className = 'palette-mask';
-      mask.innerHTML = `<div class="palette" role="dialog"><input class="palette-input" spellcheck="false" placeholder="输入文件名搜索；输入 &gt; 搜索命令"><div class="palette-list" role="listbox"></div><div class="palette-hint">↑↓ 选择 · Enter 打开 · Esc 关闭 · 输入 &gt; 切换到命令</div></div>`;
+      mask.innerHTML = `<div class="palette" role="dialog"><input class="palette-input" spellcheck="false" placeholder="输入文件名搜索；输入 &gt; 搜索命令，@ 跳转到标题"><div class="palette-list" role="listbox"></div><div class="palette-hint">↑↓ 选择 · Enter 打开 · Esc 关闭 · &gt; 命令 · @ 当前文档的标题</div></div>`;
       document.body.appendChild(mask);
       const input = $('.palette-input', mask);
       const listEl = $('.palette-list', mask);
       palette = { mask, sel: 0, items: [], files: null };
-      input.value = mode === 'cmd' ? '>' : '';
+      input.value = mode === 'cmd' ? '>' : (mode === 'heading' ? '@' : '');
       const render = async () => {
         const raw = input.value;
         const cmdMode = raw.startsWith('>');
-        const q = (cmdMode ? raw.slice(1) : raw).trim();
+        const headMode = raw.startsWith('@');
+        const q = (cmdMode || headMode ? raw.slice(1) : raw).trim();
         let pool;
         if (cmdMode) pool = commandItems();
-        else {
+        else if (headMode) {
+          // 当前文档的标题：按文档顺序列出，用缩进表示层级
+          pool = ctx.headings().map((h) => ({ kind: 'heading', h, label: h.text, detail: 'H' + h.level, level: h.level }));
+          if (!pool.length) {
+            listEl.innerHTML = '<div class="palette-empty">当前文档中还没有标题</div>';
+            palette.items = [];
+            return;
+          }
+        } else {
           if (!palette.files) palette.files = await fileItems();
           pool = palette.files;
           if (!pool.length) {
@@ -115,13 +124,13 @@
           const m = fuzzy(q, it.label) || (cmdMode ? fuzzy(q, it.search) : fuzzy(q, it.detail + '/' + it.label));
           if (m) scored.push({ it, m, onLabel: !!fuzzy(q, it.label) });
         }
-        scored.sort((a, b) => b.m.score - a.m.score);
-        palette.items = scored.slice(0, 60);
+        if (!(headMode && !q)) scored.sort((a, b) => b.m.score - a.m.score);
+        palette.items = scored.slice(0, headMode ? 300 : 60);
         palette.sel = 0;
         listEl.innerHTML = palette.items.map(({ it, m, onLabel }, i) => `<div class="palette-item${i === 0 ? ' active' : ''}" data-i="${i}">
-            <span class="pi-icon">${it.kind === 'file' ? '📄' : '›'}</span>
-            <span class="pi-label">${onLabel ? highlight(it.label, m.idx) : esc(it.label)}</span>
-            <span class="pi-detail">${esc(it.kind === 'file' ? it.detail : it.key || '')}</span></div>`).join('')
+            <span class="pi-icon">${it.kind === 'file' ? '📄' : (it.kind === 'heading' ? '#' : '›')}</span>
+            <span class="pi-label"${it.kind === 'heading' && !q ? ` style="padding-left:${(it.level - 1) * 14}px"` : ''}>${onLabel ? highlight(it.label, m.idx) : esc(it.label)}</span>
+            <span class="pi-detail">${esc(it.kind === 'file' ? it.detail : (it.kind === 'heading' ? it.detail : it.key || ''))}</span></div>`).join('')
           || '<div class="palette-empty">没有匹配的结果</div>';
       };
       const move = (d) => {
@@ -136,6 +145,7 @@
         if (!pick) return;
         closePalette();
         if (pick.it.kind === 'file') ctx.openPath(pick.it.path);
+        else if (pick.it.kind === 'heading') ctx.gotoHeading(pick.it.h);
         else ctx.runCommand(pick.it.id);
       };
       input.addEventListener('input', render);
@@ -278,11 +288,11 @@
       const img = e.target.closest && e.target.closest('#write img, .md-rich img');
       const now = Date.now();
       if (img) {
-        if (lastImgClick && lastImgClick.src === img.src && now - lastImgClick.t < 450) { lastImgClick = null; openLightbox(img.src, img.alt); return; }
+        if (lastImgClick && lastImgClick.src === img.src && now - lastImgClick.t < 500) { lastImgClick = null; openLightbox(img.src, img.alt); return; }
         lastImgClick = { src: img.src, alt: img.alt, x: e.clientX, y: e.clientY, t: now };
         return;
       }
-      if (lastImgClick && now - lastImgClick.t < 450 && Math.hypot(e.clientX - lastImgClick.x, e.clientY - lastImgClick.y) < 8 && $('#content-wrap').contains(e.target)) {
+      if (lastImgClick && now - lastImgClick.t < 500 && Math.hypot(e.clientX - lastImgClick.x, e.clientY - lastImgClick.y) < 8 && $('#content-wrap').contains(e.target)) {
         const { src, alt } = lastImgClick;
         lastImgClick = null;
         openLightbox(src, alt);

@@ -243,8 +243,37 @@
     updateTitle();
     refreshDerived();
     markTreeCurrent();
+    restoreScroll();
     bus.emit('open', { filePath: state.filePath, name: docName() });
     if (ws) ws.touchRecovery();
+  }
+
+  /* 阅读位置：记住每个文件滚动到的位置（最近 200 个），重新打开时回到那里 */
+  let positionTimer = 0;
+  function rememberScroll() {
+    if (!state.filePath || state.sourceMode || state.settings.restoreScroll === false) return;
+    clearTimeout(positionTimer);
+    positionTimer = setTimeout(() => {
+      if (!state.filePath || state.sourceMode) return;
+      const top = Math.round($('#content').scrollTop);
+      const map = Object.assign({}, state.settings.docPositions || {});
+      if ((map[state.filePath] || 0) === top) return;
+      delete map[state.filePath]; // 重新插入到末尾，最旧的排在最前
+      if (top > 0) map[state.filePath] = top;
+      const keys = Object.keys(map);
+      for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete map[k];
+      setSetting({ docPositions: map });
+    }, 800);
+  }
+
+  function restoreScroll() {
+    clearTimeout(positionTimer);
+    if (!state.filePath || state.sourceMode || state.settings.restoreScroll === false) return;
+    const top = (state.settings.docPositions || {})[state.filePath];
+    if (!top) return;
+    const p = state.filePath;
+    // 等渲染与布局完成后再滚动；期间用户切换了文档则放弃（不依赖动画帧：窗口被遮住时没有动画帧）
+    setTimeout(() => { if (state.filePath === p && !editor.isEditing()) $('#content').scrollTop = top; }, 60);
   }
 
   async function confirmDiscard() {
@@ -533,7 +562,10 @@
         return `<div class="tree-item file" data-path="${esc(c.path)}" title="${esc(c.path)}"><span class="twisty"></span><span class="label">${esc(c.name)}</span></div>`;
       }).join('');
     };
+    const panel = $('#panel-files');
+    const top = panel.scrollTop;
     box.innerHTML = build(tree, 0);
+    panel.scrollTop = top; // 刷新后保持滚动位置
     markTreeCurrent();
   }
 
@@ -593,7 +625,7 @@
       window.addEventListener('mousemove', move);
       window.addEventListener('mouseup', up);
     });
-    $('#content').addEventListener('scroll', () => requestAnimationFrame(syncOutlineActive), { passive: true });
+    $('#content').addEventListener('scroll', () => { requestAnimationFrame(syncOutlineActive); rememberScroll(); }, { passive: true });
     $('#content').addEventListener('click', (e) => { if (e.target === $('#content')) editor.activateNearest(e.clientY); });
   }
 
@@ -1030,6 +1062,7 @@
           <h4 class="pref-h">启动</h4>
           ${row('启动时显示开启动画', '启动 Moyu 时显示带图标的开启动画（约 1 秒，不影响加载速度）', check('showSplash'))}
           ${row('启动时', '', select('startupAction', [['new', '打开空白文档'], ['restoreLast', '重新打开上次的文件'], ['welcome', '打开欢迎文档']]))}
+          ${row('记住阅读位置', '重新打开文件时回到上次滚动到的位置', check('restoreScroll'))}
           ${row('最近文件数量', '「文件 → 最近打开」中保留的文件数', num('recentLimit', [[5, '5'], [10, '10'], [15, '15'], [20, '20'], [30, '30']]))}
           <h4 class="pref-h">保存</h4>
           ${row('自动保存', '已保存过的文件在停止输入后自动保存', check('autoSave'))}
@@ -1507,7 +1540,8 @@
       ['保存 / 另存为', 'Ctrl+S / Ctrl+Shift+S'], ['快速打开（输入 > 搜索命令）', 'Ctrl+P'], ['命令面板', 'F1'], ['导出 PDF', 'Ctrl+Shift+P'], ['偏好设置', 'Ctrl+,'], ['关闭窗口', 'Ctrl+W'],
       ['编辑'],
       ['撤销 / 重做', 'Ctrl+Z / Ctrl+Y（或 Ctrl+Shift+Z）'], ['查找 / 替换', 'Ctrl+F / Ctrl+H'], ['查找下一个 / 上一个', 'F3 / Shift+F3'],
-      ['粘贴为纯文本', 'Ctrl+Shift+V'],
+      ['粘贴为纯文本（不转换格式）', 'Ctrl+Shift+V'], ['复制为富文本（Word、邮件、公众号）', 'Ctrl+Shift+C'], ['全选（多行块中先选中块内内容）', 'Ctrl+A'],
+      ['在文件夹中查找', 'Ctrl+Shift+F'], ['跳转到标题', 'Ctrl+G'], ['表格操作、拼写建议等', '右键菜单'],
       ['段落'],
       ['标题 1~6 / 段落', 'Ctrl+1~6 / Ctrl+0'], ['提升 / 降低标题级别', 'Ctrl+= / Ctrl+-'],
       ['表格 / 代码块 / 公式块', 'Ctrl+T / Ctrl+Shift+K / Ctrl+Shift+M'], ['引用', 'Ctrl+Shift+Q'],
@@ -1819,6 +1853,7 @@
     'file.quickOpen': () => extras.openPalette('file'),
     'file.history': () => extras.openHistory(),
     'edit.commandPalette': () => extras.openPalette('cmd'),
+    'edit.gotoHeading': () => extras.openPalette('heading'),
     'help.checkUpdate': () => { closeModals(); return extras.checkUpdate(false); },
     'file.preferencesImage': () => openPreferences('image'),
     'file.close': onBeforeClose,
@@ -2061,6 +2096,8 @@
     extras = ZExtras.init({
       api, state, toast, showModal, runCommand, openPath, setText, getText, docName, renderMarkdown, setSetting,
       editor: () => editor,
+      headings: () => (state.sourceMode ? headingsOf(source.value) : editor.computeHeadings()),
+      gotoHeading: (h) => scrollToHeading(h.id, h.line),
       focusEditor: () => { if (state.sourceMode) source.focus(); else editor.focusEditor(); },
       pluginCommands: () => [...pluginHost.commands.values()].map((c) => Object.assign({}, c, { pluginName: (pluginHost.records.get(c.pluginId) || { manifest: {} }).manifest.name || c.pluginId })),
     });

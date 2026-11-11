@@ -118,6 +118,14 @@ module.exports = async function workspaceTests(t) {
   await wait(400);
   global.__moyuMenuPick = null;
   check('右键菜单：从菜单执行命令（加粗）', !!popped && (await text()) === '需要**加粗**的文字', await text());
+  // 真实的右键事件：由 Chromium 产生 context-menu 事件，经主进程转给页面
+  popped = null;
+  global.__moyuMenuPick = (list) => { popped = list; return null; };
+  wc.sendInputEvent({ type: 'mouseDown', x: pt.x, y: pt.y, button: 'right', clickCount: 1 });
+  wc.sendInputEvent({ type: 'mouseUp', x: pt.x, y: pt.y, button: 'right', clickCount: 1 });
+  for (let i = 0; i < 20 && !popped; i++) await wait(100);
+  global.__moyuMenuPick = null;
+  check('右键菜单：真实的右键事件能弹出菜单', !!popped && labels(popped).includes('粘贴') && labels(popped).includes('格式'), JSON.stringify(popped && labels(popped)));
   await key('Escape');
   await js('__zmark.runCommand("edit.find")');
   await wait(150);
@@ -212,6 +220,17 @@ module.exports = async function workspaceTests(t) {
   check('复制为：Markdown 源码 / HTML 代码', cMd === (await text()) && /<h1[^>]*>.*标题/.test(cHtml) && /<table>/.test(cHtml), cHtml.slice(0, 80));
   check('复制为：富文本自带表格边框等样式，可粘贴到 Word / 公众号', /<table style="border-collapse:collapse/.test(cRich) && /<td style="border:1px solid/.test(cRich) && /☑/.test(cRich) && !/task-checkbox/.test(cRich), cRich.slice(0, 200));
 
+  // 富文本需要窗口处于前台才能写入剪贴板；设置 MOYU_TEST_FOCUS=1 时把窗口切到前台实际验证一次
+  if (process.env.MOYU_TEST_FOCUS) {
+    t.win.show();
+    t.win.focus();
+    await wait(600);
+    await js('__zmark.ws.copyAs("rich")');
+    await wait(300);
+    const back = await js(`navigator.clipboard.read().then(async (items) => { const it = items[0]; return { types: it.types, html: await (await it.getType('text/html')).text(), text: await (await it.getType('text/plain')).text() }; }).catch((e) => ({ error: String(e) }))`);
+    check('复制为：前台窗口中富文本与纯文本同时写入剪贴板', !back.error && /border-collapse/.test(back.html) && /标题/.test(back.text), JSON.stringify(back).slice(0, 300));
+  }
+
   /* ---------------- 崩溃恢复 ---------------- */
   await load('');
   await js('window.zmark.invoke("recovery:list").then((l) => Promise.all(l.map((x) => window.zmark.invoke("recovery:clear", x.key))))');
@@ -238,6 +257,35 @@ module.exports = async function workspaceTests(t) {
   await load('');
   await js('__zmark.ws.syncRecovery()');
   check('崩溃恢复：没有可恢复的内容时不弹窗', (await js('__zmark.ws.showRecovery(false)')) === false);
+
+  /* ---------------- 跳转到标题 / 阅读位置 ---------------- */
+  const longDoc = ['# 第一章', ''].concat(Array.from({ length: 60 }, (_, i) => `段落 ${i}\n`), ['## 第二节', ''], Array.from({ length: 60 }, (_, i) => `内容 ${i}\n`), ['### 小结', '', '结束']).join('\n');
+  const posFile = path.join(OUT, 'position.md');
+  fs.writeFileSync(posFile, longDoc);
+  await set({ restoreScroll: true });
+  await js(`__zmark.openPath(${JSON.stringify(posFile)}, { force: true, skipConfirm: true })`);
+  await wait(300);
+  await js('__zmark.runCommand("edit.gotoHeading")');
+  await wait(250);
+  const heads = await js('Array.from(document.querySelectorAll(".palette-item .pi-label")).map((x) => x.textContent)');
+  await t.type('小结');
+  await wait(200);
+  const firstHead = await js('(document.querySelector(".palette-item.active .pi-label") || {}).textContent');
+  // 平滑滚动需要动画帧，自检窗口被遮住时不会推进：这里直接确认滚动的目标是哪个标题
+  await js('window.__scrolled = null; window.__siv = Element.prototype.scrollIntoView; Element.prototype.scrollIntoView = function (o) { window.__scrolled = this.textContent; return window.__siv.call(this, o); }; 1');
+  await key('Enter');
+  await wait(300);
+  const afterJump = await js('(() => { Element.prototype.scrollIntoView = window.__siv; return window.__scrolled; })()');
+  check('跳转到标题：Ctrl+G 列出当前文档的标题并跳转', heads.join() === '第一章,第二节,小结' && firstHead === '小结' && afterJump === '小结' && !(await js('!!document.querySelector(".palette-mask")')), JSON.stringify([heads, firstHead, afterJump]));
+  await js('document.querySelector("#content").scrollTop = 1234');
+  await wait(1300);
+  const saved = (await js('window.zmark.invoke("settings:get")')).docPositions || {};
+  await load('');
+  await js(`__zmark.openPath(${JSON.stringify(posFile)}, { force: true, skipConfirm: true })`);
+  await wait(500);
+  const restored = await js('document.querySelector("#content").scrollTop');
+  check('阅读位置：重新打开文件时回到上次滚动到的位置', saved[posFile] === 1234 && Math.abs(restored - 1234) < 3, JSON.stringify([saved[posFile], restored]));
+  await set({ restoreScroll: false });
 
   /* ---------------- 无法识别的编码 ---------------- */
   const bad = path.join(OUT, 'binary.md');

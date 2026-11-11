@@ -103,6 +103,7 @@ function buildMenu({ settings, send, newWindow, openRecent, clearRecent, plugins
         c('查找下一个', 'edit.findNext', 'F3'),
         c('查找上一个', 'edit.findPrev', 'Shift+F3'),
         c('在文件夹中查找…', 'edit.findInFolder', 'CmdOrCtrl+Shift+F'),
+        c('跳转到标题…', 'edit.gotoHeading', 'CmdOrCtrl+G'),
         { type: 'separator' },
         c('命令面板…', 'edit.commandPalette', 'F1'),
       ],

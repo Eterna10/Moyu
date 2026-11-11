@@ -18,6 +18,8 @@ const MD_EXT = ['md', 'markdown', 'mdown', 'mkd', 'txt'];
 const IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'];
 
 if (SELF_TEST) app.setPath('userData', path.join(os.tmpdir(), 'zmark-selftest'));
+// 自检窗口不抢焦点，常被其它窗口遮住；关闭遮挡检测，否则懒加载图片与动画帧会暂停，结果取决于屏幕上有什么
+if (SELF_TEST) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 else migrateUserData();
 
 /** 软件由 ZMark 更名为 Moyu：首次启动时复制旧版的设置、插件、插件数据与粘贴的图片（旧目录保留不动） */
@@ -103,6 +105,8 @@ const DEFAULTS = {
   customCodeFont: '',
   // 更新与历史版本
   smartPaste: true, // 粘贴网页 / Word 内容时转换为 Markdown
+  restoreScroll: true, // 重新打开文件时回到上次的阅读位置
+  docPositions: {},
   autoCheckUpdate: true,
   lastUpdateCheck: 0,
   skippedVersion: '', // 用户选择「跳过此版本」的版本号，自动检查时不再弹窗
@@ -579,7 +583,7 @@ if (!SELF_TEST && !app.requestSingleInstanceLock()) {
     loadSettings();
     if (SELF_TEST) {
       // 既有用例针对源码编辑，纯文本模式单独测试；自检不访问真实的 GitHub
-      Object.assign(settings, DEFAULTS, { firstRun: false, richMode: false, autoCheckUpdate: false });
+      Object.assign(settings, DEFAULTS, { firstRun: false, richMode: false, autoCheckUpdate: false, restoreScroll: false });
       plugins.resetForTest();
       for (const d of ['history', 'fonts', 'backgrounds']) fs.rmSync(path.join(app.getPath('userData'), d), { recursive: true, force: true });
     }
