@@ -90,6 +90,9 @@ body.no-sidebar #sidebar, body.no-sidebar #resizer { display: none; }
 }
 #write:empty::before { content: "点击此处开始写作……"; color: var(--muted); }
 .md-block { position: relative; border-radius: 4px; }
+/* 空行（<br>）：与一个空段落同高 */
+.md-block.blk-blank { margin: var(--para-spacing, 0.6em) 0; height: calc(1em * var(--line-height, 1.75)); }
+.md-block.blk-blank > br { display: none; }
 .md-block > :first-child:not(p) { margin-top: 0.3em; } /* 段落上下边距由「段落间距」设置控制 */
 .md-block:first-child > :first-child { margin-top: 0; }
 .md-block.blk-h1 > h1, .md-block.blk-h2 > h2 { margin-top: 0.9em; }

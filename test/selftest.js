@@ -1106,6 +1106,61 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     await key('Escape');
     await wait(100);
     check('斜杠命令：Esc 关闭菜单并保留输入', !(await js('!!document.querySelector(".slash-menu")')));
+    // 斜杠菜单：键盘选择时菜单随选中项滚动
+    await js('__zmark.editor.applyEdit("", 0)');
+    await type('/');
+    await wait(150);
+    const slashView = () => js(`(() => { const m = document.querySelector('.slash-menu'); const a = m.querySelector('.slash-item.active'); const mr = m.getBoundingClientRect(); const ar = a.getBoundingClientRect();
+      return { idx: Array.from(m.querySelectorAll('.slash-item')).indexOf(a), scroll: Math.round(m.scrollTop), overflow: m.scrollHeight > m.clientHeight, visible: ar.top >= mr.top - 1 && ar.bottom <= mr.bottom + 1 }; })()`);
+    const slashCount = await js('document.querySelectorAll(".slash-item").length');
+    for (let i = 1; i < slashCount; i++) await key('Down');
+    let sv = await slashView();
+    check('斜杠菜单：向下选到最后一项时菜单滚动，选中项可见', sv.overflow && sv.idx === slashCount - 1 && sv.visible && sv.scroll > 0, JSON.stringify(sv));
+    await key('Down');
+    sv = await slashView();
+    check('斜杠菜单：从最后一项循环到第一项时滚回顶部', sv.idx === 0 && sv.visible && sv.scroll === 0, JSON.stringify(sv));
+    await key('Up');
+    sv = await slashView();
+    check('斜杠菜单：从第一项向上循环到最后一项时滚到底部', sv.idx === slashCount - 1 && sv.visible, JSON.stringify(sv));
+    await key('Escape');
+    await js('__zmark.editor.applyEdit("", 0)');
+    await key('Escape');
+
+    // 空段落中连续回车：每次都向下新增一行（空行写作 <br>，编辑时显示为空行）
+    const enterRun = async (rich) => {
+      await set({ richMode: rich });
+      await js(`__zmark.loadText(${JSON.stringify('第一段\n\n第二段')}, {})`);
+      await js('__zmark.editor.activateRange(0, 1)');
+      await wait(100);
+      const y0 = await js('__zmark.editor.editorEl.getBoundingClientRect().top');
+      await key('Enter');
+      await key('Enter');
+      await key('Enter');
+      const y1 = await js('__zmark.editor.editorEl.getBoundingClientRect().top');
+      await type('第三行');
+      return { y0, y1, t: await text() };
+    };
+    const want = '第一段\n\n<br>\n\n<br>\n\n第三行\n\n第二段';
+    let er = await enterRun(false);
+    check('回车：空段落中连续回车每次都新增一行（源码编辑）', er.t.trim() === want && er.y1 - er.y0 > 60, JSON.stringify(er));
+    await key('Escape');
+    await wait(100);
+    const blanks = await js('Array.from(document.querySelectorAll(".md-block.blk-blank")).map((b) => b.offsetHeight)');
+    check('回车：离开后空行保留并显示为空白行', blanks.length === 2 && blanks.every((h) => h > 15) && !(await js('document.querySelector("#write").textContent.includes("<br>")')), JSON.stringify(blanks));
+    await js('__zmark.editor.activateRange(2, 3)');
+    await wait(100);
+    const blankVal = await val();
+    await key('Backspace');
+    await wait(100);
+    check('回车：空行编辑时不显示 <br>，退格删除空行', blankVal === '' && (await text()).trim() === '第一段\n\n<br>\n\n第三行\n\n第二段', JSON.stringify({ blankVal, t: await text() }));
+    await js('__zmark.editor.activateRange(0, 1)');
+    await key('Enter');
+    await key('Enter');
+    await key('Escape');
+    await wait(100);
+    check('回车：未输入内容就离开时只保留已经回车经过的空行', (await text()).trim() === '第一段\n\n<br>\n\n<br>\n\n第三行\n\n第二段', await text());
+    er = await enterRun(true);
+    check('回车：空段落中连续回车每次都新增一行（纯文本模式）', er.t.trim() === want && er.y1 - er.y0 > 60, JSON.stringify(er));
     await key('Escape');
     await set({ richMode: false });
 

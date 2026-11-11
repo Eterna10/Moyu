@@ -370,6 +370,7 @@
     const before = htmlToMd(this.richEl, this.serOpts()) || '';
     const after = htmlToMd(holder, this.serOpts()) || '';
     if (!before.trim() && after.trim()) this.replaceActiveWith(['', after], 0, 0);
+    else if (!before.trim()) this.replaceActiveWith(['<br>', ''], 1, 0); // 空段落中回车：当前行成为空行
     else this.replaceActiveWith([before, after], 1, 0);
   };
 

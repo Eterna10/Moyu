@@ -12,6 +12,10 @@
   const BLOCK_SYNTAX = /^\s*(#{1,6}\s|>|[-*+]\s|\d{1,9}[.)]\s|```|~~~|\$\$|\||<|\[toc\])/i;
   const LIST_RE = /^(\s*)([-*+]|(\d{1,9})([.)]))(\s+)(\[[ xX]\]\s+)?/;
   const TYPING_INPUTS = new Set(['insertText', 'insertCompositionText', 'deleteContentBackward', 'deleteContentForward', 'insertReplacementText']);
+  // 空行：Markdown 会合并连续的空白行，因此在空段落中回车产生的空行写作单独一行 <br>。
+  // 编辑时显示为空行（不显示 <br>），离开后仍保留；在其中输入文字即成为普通段落。
+  const BLANK = '<br>';
+  const isBlank = (s) => /^\s*<br\s*\/?>\s*$/i.test(s);
 
   function typeOfToken(t) {
     switch (t.type) {
@@ -26,7 +30,7 @@
       }
       case 'code_block': return 'code';
       case 'hr': return 'hr';
-      case 'html_block': return 'html';
+      case 'html_block': return isBlank(t.content) ? 'blank' : 'html';
       case 'table_open': return 'table';
       case 'math_block': return 'math';
       case 'front_matter': return 'frontmatter';
@@ -302,8 +306,10 @@
       this.text = lines.join('\n');
       this.prefix = start > 0 ? lines.slice(0, start).join('\n') + '\n' : '';
       this.suffix = end < lines.length ? '\n' + lines.slice(end).join('\n') : '';
-      const value = lines.slice(start, end).join('\n');
-      this.active = { start, len: end - start };
+      const src = lines.slice(start, end).join('\n');
+      const blank = end - start === 1 && isBlank(src);
+      const value = blank ? '' : src;
+      this.active = { start, len: end - start, blank };
       this.hl.findRange = null;
       this.hl.ta.value = value;
       this.updateEditClass();
@@ -321,12 +327,12 @@
     /** 提交编辑块，返回提交后的行区间 */
     commit() {
       if (!this.active) return null;
-      const { start, len } = this.active;
+      const { start, len, blank } = this.active;
       const v = this.hl.value;
       this.active = null;
       this.hl.findRange = null;
       clearTimeout(this._previewTimer);
-      if (v.trim() === '') {
+      if (v.trim() === '' && !blank) { // 空行（<br>）保留，其它空块删除
         const lines = this.text.split('\n');
         lines.splice(start, len);
         let s = start;
@@ -482,8 +488,9 @@
     onInput() {
       if (!this.active) return;
       const v = this.hl.value;
-      this.text = this.prefix + v + this.suffix;
-      this.active.len = countLines(v);
+      const src = this.active.blank && v.trim() === '' ? BLANK : v; // 空行保持写作 <br>
+      this.text = this.prefix + src + this.suffix;
+      this.active.len = countLines(src);
       if (this.hl.findRange) { this.hl.findRange = null; this.hl.refresh(true); }
       this.updateEditClass();
       this.schedulePreview();
@@ -674,6 +681,11 @@
         this.applyEdit(v.slice(0, s) + ins + v.slice(s), s + ins.length);
         return;
       }
+      // 空段落中回车：当前行成为空行，光标移到下一行
+      if (v.trim() === '') {
+        this.replaceActiveWith([BLANK, ''], 1, 0);
+        return;
+      }
       // 「Enter 换行」模式：段落内换行
       if (soft) {
         this.applyEdit(v.slice(0, s) + '\n' + v.slice(s), s + 1, undefined, 'typing');
@@ -698,6 +710,7 @@
       const a = this.active;
       if (v === '') {
         this.recordHistory('struct');
+        a.blank = false; // 退格删除空行
         const r = this.commit();
         const prev = [...this.blocks].reverse().find((b) => b.end <= r.start);
         if (prev) this.activateRange(prev.start, prev.end);

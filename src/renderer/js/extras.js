@@ -201,7 +201,20 @@
       const below = r.bottom + 4 + h < window.innerHeight - 30;
       slash.el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 240)) + 'px';
       slash.el.style.top = (below ? r.bottom + 4 : Math.max(8, r.top - h - 4)) + 'px';
+      revealSlashSel(); // 继续输入筛选后，选中项仍保持可见
       return undefined;
+    }
+
+    /** 菜单只在自身内部滚动，让键盘选中的项目完整可见（滚到顶部时连同「插入」标题一起显示） */
+    function revealSlashSel() {
+      const el = slash && slash.el;
+      const a = el && el.querySelector('.slash-item.active');
+      if (!a) return;
+      const pad = 4;
+      const top = slash.sel === 0 ? 0 : a.offsetTop - pad;
+      const bottom = a.offsetTop + a.offsetHeight + pad;
+      if (top < el.scrollTop) el.scrollTop = top;
+      else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight;
     }
 
     function closeSlash() {
@@ -224,6 +237,7 @@
       if (k === 'ArrowDown' || k === 'ArrowUp') {
         slash.sel = (slash.sel + (k === 'ArrowDown' ? 1 : -1) + slash.items.length) % slash.items.length;
         slash.el.querySelectorAll('.slash-item').forEach((el, j) => el.classList.toggle('active', j === slash.sel));
+        revealSlashSel();
       } else if (k === 'Enter' || k === 'Tab') runSlash(slash.sel);
       else if (k === 'Escape') closeSlash();
       else return;
