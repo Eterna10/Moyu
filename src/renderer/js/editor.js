@@ -16,6 +16,7 @@
   // 编辑时显示为空行（不显示 <br>），离开后仍保留；在其中输入文字即成为普通段落。
   const BLANK = '<br>';
   const isBlank = (s) => /^\s*<br\s*\/?>\s*$/i.test(s);
+  const TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
 
   function typeOfToken(t) {
     switch (t.type) {
@@ -907,7 +908,10 @@
         e.preventDefault();
         const file = img.getAsFile();
         Promise.resolve(this.opts.onPasteImage(file)).then((mdText) => { if (mdText) this.insertText(mdText); });
+        return;
       }
+      // 智能粘贴：网页 / Word 内容转为 Markdown，在选中文字上粘贴网址生成链接（由宿主决定是否处理）
+      if (this.opts.onSmartPaste) this.opts.onSmartPaste(e);
     }
 
     insertText(str) {
@@ -1102,6 +1106,84 @@
       this.text = newText;
       this.render();
       this.emitChange();
+    }
+
+    /* ======================= 表格操作 ======================= */
+
+    /** 光标所在的表格行列（源码编辑）：row 为源码行号，col 为单元格序号 */
+    tableCaret() {
+      const before = this.hl.value.slice(0, this.hl.ta.selectionStart);
+      const seg = before.slice(before.lastIndexOf('\n') + 1);
+      return { row: countLines(before) - 1, col: Math.max(0, (seg.match(/(?<!\\)\|/g) || []).length - 1) };
+    }
+
+    /** 当前编辑块是表格时返回 { rows, row, col }；rows[0] 为表头，rows[1] 为对齐行，其后为数据行 */
+    tableContext() {
+      if (!this.active) return null;
+      const lines = this.hl.value.split('\n').filter((l) => l.trim());
+      if (lines.length < 2 || !/^\s*\|/.test(lines[0]) || !TABLE_SEP.test(lines[1])) return null;
+      const split = (l) => l.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map((c) => c.trim());
+      const rows = lines.map(split);
+      const n = Math.max(...rows.map((r) => r.length));
+      rows.forEach((r, i) => { while (r.length < n) r.push(i === 1 ? '---' : ''); });
+      const pos = this.tableCaret();
+      return { rows, row: Math.max(0, Math.min(pos.row, rows.length - 1)), col: Math.max(0, Math.min(pos.col, n - 1)) };
+    }
+
+    /**
+     * 表格操作：rowAbove / rowBelow / delRow / colLeft / colRight / delCol /
+     * alignLeft / alignCenter / alignRight / alignNone / delete。不适用时返回 false。
+     */
+    tableOp(op) {
+      const t = this.tableContext();
+      if (!t) return false;
+      const { rows } = t;
+      let { row, col } = t;
+      const n = rows[0].length;
+      const blank = () => Array.from({ length: rows[0].length }, () => '');
+      const align = { alignLeft: ':---', alignCenter: ':---:', alignRight: '---:', alignNone: '---' };
+      if (op === 'delete') { this.applyEdit('', 0); return true; }
+      if (op === 'rowAbove' || op === 'rowBelow') {
+        // 表头上方不能插入行：在表头或对齐行上操作时都插到第一行数据之前
+        const at = row <= 1 ? 2 : (op === 'rowAbove' ? row : row + 1);
+        rows.splice(at, 0, blank());
+        row = at;
+      } else if (op === 'delRow') {
+        if (row <= 1) return false; // 表头不能删除
+        rows.splice(row, 1);
+        row = rows.length > 2 ? Math.min(row, rows.length - 1) : 0;
+      } else if (op === 'colLeft' || op === 'colRight') {
+        const at = op === 'colLeft' ? col : col + 1;
+        rows.forEach((r, i) => r.splice(at, 0, i === 1 ? '---' : ''));
+        col = at;
+      } else if (op === 'delCol') {
+        if (n <= 1) return false;
+        rows.forEach((r) => r.splice(col, 1));
+        col = Math.min(col, n - 2);
+      } else if (align[op]) {
+        rows[1][col] = align[op];
+      } else return false;
+      if (row === 1) row = 0;
+      const lines = rows.map((r) => '| ' + r.map((c) => c || ' ').join(' | ') + ' |');
+      // 光标放到目标单元格的开头
+      let caret = 0;
+      for (let i = 0; i < row; i++) caret += lines[i].length + 1;
+      caret += 2;
+      for (let j = 0; j < col; j++) caret += (rows[row][j] || ' ').length + 3;
+      this._tableTarget = { row, col };
+      this.applyEdit(lines.join('\n'), caret);
+      return true;
+    }
+
+    /* ======================= 粘贴 Markdown ======================= */
+
+    /** 粘贴由网页 / Word 内容转换来的 Markdown：单行内容插入光标处，多块内容作为新的块插到当前块之后 */
+    pasteMarkdown(md) {
+      this.ensureActive();
+      if (!md.includes('\n')) { this.insertText(md); return; }
+      const v = this.hl.value;
+      if (v.trim() === '') this.replaceActiveWith([md], 0);
+      else this.replaceActiveWith([v, md], 1);
     }
 
     /* ======================= 撤销 / 重做 ======================= */

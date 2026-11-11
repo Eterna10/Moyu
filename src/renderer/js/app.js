@@ -32,6 +32,7 @@
   let source;
   let pluginHost;
   let extras;
+  let ws; // 工作区功能（右键菜单、文件树管理、搜索、智能粘贴、崩溃恢复）
 
   /* ======================= 插件宿主所需的基础设施 ======================= */
 
@@ -243,6 +244,7 @@
     refreshDerived();
     markTreeCurrent();
     bus.emit('open', { filePath: state.filePath, name: docName() });
+    if (ws) ws.touchRecovery();
   }
 
   async function confirmDiscard() {
@@ -259,12 +261,17 @@
     if (!opts.skipConfirm && !(await confirmDiscard())) return;
     try {
       const r = await api.invoke('fs:read', p);
+      if (r.lossy) {
+        // 无法识别编码：作为未命名的副本打开，保存时需另选位置，原文件不会被覆盖
+        loadText(r.content, { name: basename(p).replace(/(\.[^.]+)?$/, '（副本）$1'), baseDir: dirname(p) });
+        toast('此文件不是可识别的文本编码，内容可能显示为乱码；已作为副本打开，保存不会覆盖原文件', true);
+        return;
+      }
       loadText(r.content, { filePath: p, mtime: r.mtime });
       api.invoke('app:addRecent', p);
       rememberLastFile(p);
       // 非 UTF-8 文件已按原编码正确读取；Moyu 统一以 UTF-8 保存
-      if (r.lossy) toast('此文件不是可识别的文本编码，内容可能显示为乱码；请不要保存，以免覆盖原文件', true);
-      else if (r.encoding && r.encoding !== 'UTF-8') toast(`此文件的编码为 ${r.encoding}，已正确读取；保存时将转换为 UTF-8`);
+      if (r.encoding && r.encoding !== 'UTF-8') toast(`此文件的编码为 ${r.encoding}，已正确读取；保存时将转换为 UTF-8`);
     } catch (e) {
       toast('无法打开文件：' + e.message, true);
     }
@@ -342,6 +349,7 @@
       updateTitle();
       if (!quiet) toast('已保存');
       bus.emit('save', { filePath: p });
+      if (ws) ws.touchRecovery();
       return true;
     } catch (e) {
       toast('保存失败：' + e.message, true);
@@ -385,7 +393,7 @@
   async function onBeforeClose() {
     let ok = true;
     try { ok = await confirmDiscard(); } catch (e) { ok = true; } // 初始化失败时也必须能关闭窗口
-    if (ok) api.invoke('win:close');
+    if (ok) { if (ws) await ws.clearRecovery(); api.invoke('win:close'); }
   }
 
   /* ======================= 标题 / 状态栏 / 大纲 ======================= */
@@ -486,6 +494,7 @@
     refreshDerived();
     autoSave();
     if (extras) extras.checkSlash();
+    if (ws) ws.touchRecovery();
   }
 
   /* ======================= 文件树 ======================= */
@@ -564,13 +573,9 @@
     $('#btn-refresh').onclick = () => { if (state.folder) loadFolder(state.folder); };
     $('#btn-new-file').onclick = async () => {
       if (!state.folder) { toast('请先打开一个文件夹'); return; }
-      const name = await promptText('新建 Markdown 文件', '未命名.md');
-      if (!name) return;
-      try {
-        const p = await api.invoke('fs:newFile', state.folder, name);
-        await loadFolder(state.folder);
-        openPath(p);
-      } catch (err) { toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true); }
+      const id = await api.invoke('menu:popup', [{ id: 'file', label: '新建文件…' }, { id: 'folder', label: '新建文件夹…' }]);
+      if (id === 'file') ws.newFileIn(state.folder);
+      else if (id === 'folder') ws.newFolderIn(state.folder);
     };
     const rz = $('#resizer');
     rz.addEventListener('mousedown', (e) => {
@@ -593,6 +598,39 @@
   }
 
   /* ======================= 源代码模式 ======================= */
+
+  /** 定位到文档中的一段文字（搜索结果等）：index 为全文偏移量 */
+  function revealAt(index, length) {
+    if (state.sourceMode) {
+      source.ta.focus();
+      source.ta.setSelectionRange(index, index + length);
+      source.setFindRange([index, index + length]);
+      scrollSourceToCaret(true);
+    } else editor.revealMatch(index, length);
+  }
+
+  /** 正在编辑的文件被改名 / 移动：跟随到新路径 */
+  function relocate(p) {
+    state.filePath = p;
+    state.baseDir = dirname(p);
+    if (!state.sourceMode) editor.setBaseDir(state.baseDir);
+    api.invoke('app:addRecent', p);
+    rememberLastFile(p);
+    lastTitle = '';
+    updateTitle();
+    markTreeCurrent();
+  }
+
+  /** 正在编辑的文件被删除：内容保留为尚未保存的新文档 */
+  function detach() {
+    state.displayName = docName();
+    state.filePath = null;
+    state.mtime = null;
+    state.savedText = null;
+    lastTitle = '';
+    updateTitle();
+    markTreeCurrent();
+  }
 
   function scrollSourceToCaret(center) {
     const sc = $('#source');
@@ -1069,6 +1107,7 @@
           ${row('回车键', '列表、引用、表格、代码块中的智能回车不受影响', select('enterMode', [['paragraph', 'Enter 新段落，Shift+Enter 换行'], ['newline', 'Enter 换行，Shift+Enter 新段落']]))}
           ${row('自动配对括号和引号', '输入 ( [ { " \' ` 以及（【「《“ 时自动补全另一半', check('autoPair'))}
           ${row('选中文字后输入符号自动包裹', '选中文字后输入 * _ ~ = $ ` ( [ " 等，在两侧加上符号', check('wrapSelection'))}
+          ${row('智能粘贴', '从网页、Word、Excel 复制的内容自动转为 Markdown（标题、列表、表格、链接等）；在选中的文字上粘贴网址生成链接。Ctrl+Shift+V 始终粘贴为纯文本', check('smartPaste'))}
           ${row('编辑时实时预览', '编辑公式、图表、表格、图片时在下方显示渲染效果', check('livePreview'))}
           ${row('拼写检查（英文）', '', check('spellcheck'))}
           <h4 class="pref-h">缩进</h4>
@@ -1797,6 +1836,12 @@
       if (uiInputFocused() || state.sourceMode) { if (state.sourceMode && !uiInputFocused()) source.ta.focus(); document.execCommand('selectAll'); return; }
       if (!editor.selectAll()) document.execCommand('selectAll');
     },
+    'edit.pastePlain': () => { ws.pastePlain(); return api.invoke('edit:exec', 'pastePlain'); },
+    'edit.copyRich': () => ws.copyAs('rich'),
+    'edit.copyHtml': () => ws.copyAs('html'),
+    'edit.copyMarkdown': () => ws.copyAs('markdown'),
+    'edit.findInFolder': () => ws.openSearch(),
+    'file.recover': () => ws.showRecovery(true),
     'edit.find': () => openFind(false),
     'edit.replace': () => openFind(true),
     'edit.findNext': () => findStep(1),
@@ -1910,6 +1955,7 @@
       onLink,
       onCopy: (t) => api.invoke('app:copyText', t).then(() => toast('已复制代码')),
       onPasteImage,
+      onSmartPaste: (e) => (ws ? ws.smartPaste(e) : false),
       onSelection,
     });
     editor.setOptions(Object.assign({ typewriter: state.settings.typewriter, spellcheck: state.settings.spellcheck }, pick(state.settings, EDITOR_KEYS)));
@@ -1962,6 +2008,8 @@
         e.preventDefault();
         runCommand(e.key.toLowerCase() === 'z' ? 'edit.undo' : 'edit.redo');
       }
+      // Ctrl+Shift+V：编辑框自行完成「粘贴为纯文本」，这里只需告知智能粘贴本次不要转换
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'v' && ws) ws.pastePlain();
       // Ctrl+Shift+Z 重做（菜单中重做为 Ctrl+Y，这里补充常见的另一种快捷键）
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -2018,6 +2066,13 @@
     });
     editor.editorEl.addEventListener('keydown', (e) => extras.slashKeydown(e), true);
     $('#sb-update').onclick = () => extras.updateBadgeClick();
+    ws = ZWorkspace.init({
+      api, state, toast, showModal, promptText, runCommand, openPath, loadText, loadFolder, getText, isDirty, docName, setSetting,
+      getSelection, renderMarkdown, onLink, revealAt, relocate, detach, source,
+      editor: () => editor,
+      focusEditor: () => { if (state.sourceMode) source.focus(); else editor.focusEditor(); },
+      openLightbox: (src, alt) => extras.openLightbox(src, alt),
+    });
     api.on('plugins-changed', () => pluginHost.reload().then(refreshPluginPane));
 
     const initial = await api.invoke('win:initial');
@@ -2032,8 +2087,10 @@
 
     // 启动后自动检查更新：结果显示在状态栏，发现新版本时弹窗询问（只在程序启动时的首个窗口检查）
     if (!state.selfTest && initial.startup && state.settings.autoCheckUpdate) setTimeout(() => extras.checkUpdate(true), 2500);
+    // 上次没有正常退出时，提示恢复未保存的内容（只在程序启动时的首个窗口检查）
+    if (!state.selfTest && initial.startup) ws.showRecovery(false);
     // 供自检脚本使用
-    window.__zmark = { extras, refreshFonts, editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, exportDoc, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
+    window.__zmark = { ws, docName, extras, refreshFonts, editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, exportDoc, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
     document.body.dataset.ready = '1';
     hideSplash();
   }

@@ -14,7 +14,7 @@
     ['file.save', '保存', 'Ctrl+S'], ['file.saveAs', '另存为…', 'Ctrl+Shift+S'], ['file.toggleAutoSave', '开关自动保存', ''],
     ['file.history', '历史版本…', '', 'history version 恢复'], ['file.exportHtml', '导出 HTML…', '', 'export'], ['file.exportPdf', '导出 PDF…', 'Ctrl+Shift+P', 'export'],
     ['file.reveal', '在资源管理器中显示', ''], ['file.preferences', '偏好设置…', 'Ctrl+,', 'settings 设置'], ['file.preferencesTheme', '主题与外观…', '', 'theme background 背景 字体'],
-    ['edit.undo', '撤销', 'Ctrl+Z'], ['edit.redo', '重做', 'Ctrl+Y'], ['edit.selectAll', '全选', 'Ctrl+A', 'select all'], ['edit.find', '查找', 'Ctrl+F', 'search'], ['edit.replace', '替换', 'Ctrl+H'],
+    ['edit.undo', '撤销', 'Ctrl+Z'], ['edit.redo', '重做', 'Ctrl+Y'], ['edit.selectAll', '全选', 'Ctrl+A', 'select all'], ['edit.findInFolder', '在文件夹中查找…', 'Ctrl+Shift+F', 'search grep 全文搜索'], ['edit.copyRich', '复制为富文本（Word、邮件、公众号）', 'Ctrl+Shift+C', 'copy rich word wechat'], ['edit.copyHtml', '复制为 HTML 代码', '', 'copy html'], ['edit.copyMarkdown', '复制 Markdown 源码', '', 'copy markdown'], ['edit.pastePlain', '粘贴为纯文本', 'Ctrl+Shift+V', 'paste plain'], ['file.recover', '恢复未保存的文档…', '', 'recover 崩溃 恢复'], ['edit.find', '查找', 'Ctrl+F', 'search'], ['edit.replace', '替换', 'Ctrl+H'],
     ['para.h1', '一级标题', 'Ctrl+1', 'heading'], ['para.h2', '二级标题', 'Ctrl+2', 'heading'], ['para.h3', '三级标题', 'Ctrl+3', 'heading'],
     ['para.h4', '四级标题', 'Ctrl+4'], ['para.h5', '五级标题', 'Ctrl+5'], ['para.h6', '六级标题', 'Ctrl+6'], ['para.p', '正文段落', 'Ctrl+0', 'paragraph'],
     ['para.table', '插入表格', 'Ctrl+T', 'table'], ['para.code', '插入代码块', 'Ctrl+Shift+K', 'code'], ['para.math', '插入公式块', 'Ctrl+Shift+M', 'math latex'],

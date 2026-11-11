@@ -194,7 +194,7 @@
   const P = BlockEditor.prototype;
   const base = {};
   for (const name of ['activateRange', 'activateBlockEl', 'commit', 'applyEdit', 'replaceRange', 'revealMatch', 'toggleWrap', 'insertLink', 'insertText',
-    'scrollToCaret', 'emitSelection', 'setOptions', 'updateEditClass', 'blockFullySelected']) base[name] = P[name];
+    'scrollToCaret', 'emitSelection', 'setOptions', 'updateEditClass', 'blockFullySelected', 'tableCaret', 'tableOp']) base[name] = P[name];
   const NORM = / (id|data-num|data-line|data-eq)="[^"]*"/g;
   const TYPING = new Set(['insertText', 'insertCompositionText', 'deleteContentBackward', 'deleteContentForward']);
 
@@ -258,6 +258,7 @@
         Promise.resolve(this.opts.onPasteImage(img.getAsFile())).then((t) => { if (t) this.insertText(t); });
         return;
       }
+      if (this.opts.onSmartPaste && this.opts.onSmartPaste(e)) return; // 已转换为 Markdown 或链接
       const text = e.clipboardData.getData('text/plain');
       if (text) document.execCommand('insertText', false, text); // 只粘贴纯文本，保持编辑区结构可控
     });
@@ -600,6 +601,28 @@
     if ('richMode' in o && this.active) this.refreshRich(this.hl.ta.selectionStart);
   };
 
+  P.tableCaret = function () {
+    if (!this.rich) return base.tableCaret.call(this);
+    const sel = window.getSelection();
+    const node = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+    const cell = node && node.closest ? node.closest('td, th') : null;
+    if (!cell || !this.richEl.contains(cell)) return { row: 0, col: 0 };
+    const tr = Array.from(this.richEl.querySelectorAll('tr')).indexOf(cell.parentElement);
+    return { row: tr <= 0 ? 0 : tr + 1, col: Array.from(cell.parentElement.children).indexOf(cell) }; // 源码中表头之后多一行对齐行
+  };
+
+  // 纯文本模式下源码偏移量无法精确对应到单元格，表格操作后直接把光标放进目标单元格
+  P.tableOp = function (op) {
+    this._tableTarget = null;
+    const ok = base.tableOp.call(this, op);
+    const t = this._tableTarget;
+    if (ok && t && this.rich) {
+      const tr = this.richEl.querySelectorAll('tr')[t.row === 0 ? 0 : t.row - 1];
+      if (tr && tr.children[t.col]) this.richFocusCell(tr.children[t.col]);
+    }
+    return ok;
+  };
+
   P.blockFullySelected = function () {
     if (!this.rich) return base.blockFullySelected.call(this);
     const sel = window.getSelection();
@@ -613,4 +636,5 @@
     this.editorEl.classList.toggle('rich', !!this.rich);
   };
 
+  BlockEditor.htmlToMd = htmlToMd; // 供智能粘贴使用
 })();

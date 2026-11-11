@@ -342,6 +342,7 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     await themeFontTests();
     await updateTests();
     await featureTests();
+    await require('./workspace-tests.js')({ js, wc, check, wait, key, type, text, val, OUT, shot, app });
 
     /* ---------- 偏好设置选项 ---------- */
     await settingsTests();

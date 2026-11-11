@@ -33,12 +33,13 @@
         <div class="side-tabs">
           <button class="side-tab" data-tab="files" title="文件 (Ctrl+Shift+3)">文件</button>
           <button class="side-tab" data-tab="outline" title="大纲 (Ctrl+Shift+1)">大纲</button>
+          <button class="side-tab" data-tab="search" title="在文件夹中查找 (Ctrl+Shift+F)">搜索</button>
         </div>
         <div class="side-panel" id="panel-files">
           <div class="folder-head">
             <span id="folder-name" class="folder-name">未打开文件夹</span>
             <span class="folder-actions">
-              <button class="icon-btn" id="btn-new-file" title="新建文件">＋</button>
+              <button class="icon-btn" id="btn-new-file" title="新建文件或文件夹">＋</button>
               <button class="icon-btn" id="btn-refresh" title="刷新">⟳</button>
               <button class="icon-btn" id="btn-open-folder" title="打开文件夹">📂</button>
             </span>
@@ -47,6 +48,15 @@
         </div>
         <div class="side-panel" id="panel-outline">
           <div id="outline" class="outline"></div>
+        </div>
+        <div class="side-panel" id="panel-search">
+          <div class="search-box">
+            <input id="search-input" type="text" placeholder="在文件夹中查找" spellcheck="false">
+            <button class="icon-btn toggle" id="search-case" title="区分大小写">Aa</button>
+            <button class="icon-btn toggle" id="search-regex" title="正则表达式">.*</button>
+          </div>
+          <div id="search-status" class="search-status"></div>
+          <div id="search-results" class="search-results"></div>
         </div>
       </aside>
       <div id="resizer" title="拖动调整侧边栏宽度"></div>
@@ -109,6 +119,7 @@
   <script src="js/plugins.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/extras.js"></script>
+  <script src="js/workspace.js"></script>
   <script src="js/aiprompt.js"></script>
   <script src="js/app.js"></script>
 </body>

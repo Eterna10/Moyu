@@ -9,6 +9,7 @@ const plugins = require('./plugins');
 const appearance = require('./appearance');
 const updater = require('./updater');
 const history = require('./history');
+const workspace = require('./workspace');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SELF_TEST = process.argv.includes('--self-test');
@@ -101,6 +102,7 @@ const DEFAULTS = {
   codeFont: 'default', // default | mono | font:<家族名> | custom
   customCodeFont: '',
   // 更新与历史版本
+  smartPaste: true, // 粘贴网页 / Word 内容时转换为 Markdown
   autoCheckUpdate: true,
   lastUpdateCheck: 0,
   skippedVersion: '', // 用户选择「跳过此版本」的版本号，自动检查时不再弹窗
@@ -207,6 +209,7 @@ function createWindow(filePath) {
     return { action: 'deny' };
   });
   win.webContents.session.setSpellCheckerLanguages(['en-US']);
+  workspace.attachContextMenu(win);
 
   win.on('close', (e) => {
     if (win.forceClose || SELF_TEST) return;
@@ -263,13 +266,14 @@ function readTree(dir, depth) {
   if (depth > 6) return node;
   let entries = [];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return node; }
+  entries = entries.filter((ent) => !ent.name.startsWith('.') && ent.name !== 'node_modules');
   entries.sort((a, b) => (b.isDirectory() - a.isDirectory()) || a.name.localeCompare(b.name, 'zh-CN', { numeric: true }));
+  node.empty = entries.length === 0; // 全空的文件夹（例如刚新建的）也显示；只有图片等其它文件的文件夹不显示
   for (const ent of entries) {
-    if (ent.name.startsWith('.') || ent.name === 'node_modules') continue;
     const full = path.join(dir, ent.name);
     if (ent.isDirectory()) {
       const child = readTree(full, depth + 1);
-      if (child.children.length) node.children.push(child);
+      if (child.children.length || child.empty) node.children.push(child);
     } else if (MD_EXT.includes(path.extname(ent.name).slice(1).toLowerCase())) {
       node.children.push({ name: ent.name, path: full, dir: false });
     }
@@ -327,6 +331,7 @@ function registerIpc() {
     patchDir: () => process.env.MOYU_PATCH_DIR || null, // 仅在自检时使用
   });
   history.register(h, { getSettings: () => settings });
+  workspace.register(h, { mdExt: MD_EXT, decodeText, selfTest: SELF_TEST });
   plugins.register(h, { root: ROOT, getSettings: () => settings, saveSettings, refreshMenu, windows });
 
   h('settings:get', () => settings);
