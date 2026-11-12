@@ -63,6 +63,7 @@ module.exports = async function exportTests(t) {
   check('导出图片：超长文档分成多张（名称-1.png、名称-2.png …）', !!files && files.length >= 2 && files[0].endsWith('长文-1.png') && files[1].endsWith('长文-2.png') && sizes.every((s) => s.width === 960 && s.height <= 12000) && !fs.existsSync(multi), JSON.stringify({ files: (files || []).map((f) => path.basename(f)), sizes }));
   check('导出图片：分段处落在段落之间，没有把文字切成两半', !!files && files.length >= 2 && rowUniform(files[0], -1) && rowUniform(files[1], 0));
   await set({ exportImageWidth: 'standard', exportImageScale: 2 });
+  check('导出图片：不影响主窗口的缩放比例', Math.abs(t.wc.getZoomFactor() - 1) < 0.001 && (await js('window.devicePixelRatio')) === (await js('window.devicePixelRatio')), String(t.wc.getZoomFactor()));
 
   /* ---------------- Pandoc ---------------- */
   const pm = exporter.prepareMarkdown('这是 ==高亮== 和 `==代码==`\n\n[TOC]\n\n```\n==块==\n[TOC]\n```\n\na == b 且 c == d');

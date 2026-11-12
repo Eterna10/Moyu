@@ -398,11 +398,23 @@
     ADD_ATTR: ['target', 'checked', 'data-line', 'data-src', 'data-orig-src', 'loading'],
     FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form'],
   };
+  // 净化结果按「最近使用」缓存：每次渲染都会用到当前文档的全部块，它们始终排在最后；
+  // 超出上限时只淘汰最久没用到的部分。（原先满了就整个清空：开过几篇文档后再打开大文档，
+  // 缓存在载入途中被清空，之后每次点击都要把整篇文档重新净化一遍。）
+  const SANITIZE_CACHE_MAX = 20000;
   function sanitize(html) {
-    if (sanitizeCache.has(html)) return sanitizeCache.get(html);
+    const hit = sanitizeCache.get(html);
+    if (hit !== undefined) {
+      sanitizeCache.delete(html);
+      sanitizeCache.set(html, hit);
+      return hit;
+    }
     const clean = DOMPurify.sanitize(html, PURIFY_CFG);
-    if (sanitizeCache.size > 3000) sanitizeCache.clear();
     sanitizeCache.set(html, clean);
+    if (sanitizeCache.size > SANITIZE_CACHE_MAX) {
+      let n = SANITIZE_CACHE_MAX / 10;
+      for (const k of sanitizeCache.keys()) { if (n-- <= 0) break; sanitizeCache.delete(k); }
+    }
     return clean;
   }
 

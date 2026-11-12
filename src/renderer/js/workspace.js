@@ -630,7 +630,7 @@
             const exists = d.filePath && (await api.invoke('fs:exists', d.filePath));
             const mtime = exists ? await api.invoke('fs:stat', d.filePath) : null;
             // 原文件还在：恢复为该文件的未保存修改；否则作为新文档
-            ctx.openDoc(d.text, exists ? { filePath: d.filePath, mtime, markDirty: true } : { name: d.name, markDirty: true });
+            await ctx.openDoc(d.text, exists ? { filePath: d.filePath, mtime, markDirty: true } : { name: d.name, markDirty: true });
             await api.invoke('recovery:clear', key);
             item.remove();
             // 启用标签页时可以连续恢复多份文档，各占一个标签页

@@ -82,6 +82,13 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
       workspace: () => require('./workspace-tests.js')(T),
       export: () => require('./export-tests.js')(T),
       perf: () => perfTests(),
+      plugin: () => pluginTests(),
+      image: () => imageTests(),
+      rich: () => richTests(),
+      themefont: () => themeFontTests(),
+      update: () => updateTests(),
+      feature: () => featureTests(),
+      settings: () => settingsTests(),
       settings: () => settingsTests(),
       feature: () => featureTests(),
       rich: () => richTests(),
@@ -1393,6 +1400,9 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     const big = '# 性能测试\n\n' + parts.join('\n');
     const r = await js(`(async () => {
       const z = __zmark;
+      // 模拟用了一段时间之后的状态：渲染缓存里已有不少其它文档的内容。
+      // （缓存曾经在装满时整个清空，此时再打开大文档，每次点击都要把全文重新净化一遍，约半秒）
+      for (let i = 0; i < 1500; i++) ZMD.sanitize('<p>之前打开过的文档中的第 ' + i + ' 段</p>');
       const t0 = performance.now();
       z.loadText(${JSON.stringify(big)}, {});
       const load = performance.now() - t0;

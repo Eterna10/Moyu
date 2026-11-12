@@ -49,7 +49,7 @@ async function htmlToImages(html, outPath, opts = {}) {
   const page = html.includes('</head>') ? html.replace('</head>', extra + '</head>') : extra + html;
   const tmp = path.join(os.tmpdir(), `moyu-image-${Date.now()}.html`);
   fs.writeFileSync(tmp, page, 'utf8');
-  const w = new BrowserWindow({ show: false, width: winW, height: 600, useContentSize: true, webPreferences: { sandbox: true, backgroundThrottling: false, zoomFactor: zoom } });
+  const w = new BrowserWindow({ show: false, width: winW, height: 600, useContentSize: true, webPreferences: { sandbox: true, backgroundThrottling: false, zoomFactor: zoom, partition: 'moyu-export-image' } }); // 独立会话：缩放比例不会波及主窗口
   const wc = w.webContents;
   const files = [];
   try {

@@ -63,6 +63,27 @@ module.exports = async function tabsTests(t) {
   check('标签页：同名文件用所在文件夹区分', (await names()).join() === 'a.md,a.md<,b.md*,c.md' && dirs.join() === 'tabs,sub,,', JSON.stringify(dirs));
   await shot('30-标签页.png');
 
+  /* ---------------- 源代码模式 ---------------- */
+  await js('__zmark.toggleSource()');
+  await wait(200);
+  const srcA2 = await js('__zmark.source.value');
+  await js(`__zmark.tabs.switchTo(${(await list()).findIndex((x) => x.path === C)})`);
+  await wait(300);
+  const srcC = await js('__zmark.source.value');
+  await js('__zmark.source.ta.focus(); __zmark.source.ta.setSelectionRange(0, 0); document.execCommand("insertText", false, "源码模式下的修改 "); 1');
+  await wait(200);
+  await js(`__zmark.tabs.switchTo(${(await list()).findIndex((x) => x.path === A2)})`);
+  await wait(300);
+  const srcBack = await js('__zmark.source.value');
+  await js('__zmark.toggleSource()');
+  await wait(200);
+  l = await list();
+  check('标签页：源代码模式下切换标签页，各自的源码与修改都保留', srcA2 === '子目录里的 A' && /^# C/.test(srcC) && srcBack === '子目录里的 A' && l.find((x) => x.path === C).dirty && (await text()) === '子目录里的 A', JSON.stringify([srcA2, srcC.slice(0, 10), srcBack]));
+  confirmWith(1);
+  await js(`__zmark.tabs.close(${l.findIndex((x) => x.path === C)})`);
+  await open(C);
+  await open(A2);
+
   /* ---------------- 键盘 ---------------- */
   await js('__zmark.editor.activateRange(0, 1)');
   const before = await text();
@@ -169,7 +190,8 @@ module.exports = async function tabsTests(t) {
   await js('document.querySelector(".recover-item [data-act=restore]").click()');
   await wait(400);
   l = await list();
-  check('崩溃恢复：多份文档可以连续恢复，各占一个标签页', still === 1 && !(await js('!!document.querySelector(".recover-modal")')) && l.length === nBefore + 2 && l.filter((x) => x.dirty).length >= 2 && l.some((x) => x.name === '草稿' && x.dirty), JSON.stringify(l));
+  // a.md 已经开着：恢复到它所在的标签页；草稿是新文档：占一个新标签页
+  check('崩溃恢复：多份文档可以连续恢复，已打开的文件恢复到原标签页，不重复打开', still === 1 && !(await js('!!document.querySelector(".recover-modal")')) && l.length === nBefore + 1 && l.filter((x) => x.path === A).length === 1 && l.find((x) => x.path === A).dirty && l.some((x) => x.name === '草稿' && x.dirty), JSON.stringify(l));
 
   /* ---------------- 会话恢复 ---------------- */
   confirmWith(1);

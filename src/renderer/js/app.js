@@ -297,7 +297,7 @@
     if (!state.sourceMode) editor.dropEmptyActive();
     for (const k of DOC_KEYS) t[k] = state[k];
     t.text = getText();
-    t.history = editor.history;
+    t.history = editor.history.length > 150 ? editor.history.slice(-150) : editor.history; // 后台标签页只保留最近的撤销记录
     t.future = editor.future;
   }
 
@@ -349,8 +349,14 @@
   }
 
   /** 在标签页中打开一份内容（未启用标签页时替换当前文档） */
-  function openDoc(content, meta) {
-    if (tabsOn()) prepareTab();
+  async function openDoc(content, meta) {
+    if (tabsOn()) {
+      const fp = meta && meta.filePath;
+      // 该文件已经在某个标签页中打开：载入到那个标签页，而不是再开一份
+      const other = fp && tabs.find((t) => t !== activeTab && samePath(t.filePath, fp));
+      if (other) await switchTab(other);
+      else if (!samePath(fp, state.filePath)) prepareTab();
+    }
     loadText(content, meta);
   }
 
@@ -431,7 +437,7 @@
   function renderTabs() {
     const bar = $('#tabbar');
     if (!bar || !activeTab) return;
-    const show = tabsOn() && tabs.length > 1;
+    const show = tabs.length > 1; // 设置只决定新文件怎样打开；已经开着的标签页始终可见
     const names = tabs.map(tabName);
     const sig = show ? tabs.map((t, i) => [t.id, names[i], tabPath(t) || '', tabDirty(t) ? 1 : 0, t === activeTab ? 1 : 0].join('|')).join('\n') : '';
     if (sig === tabsSig) return;
@@ -685,7 +691,7 @@
       if (shown) { await switchTab(shown); return; }
     } else if (!(await confirmDiscard())) return;
     const r = await api.invoke('app:helpDoc', name);
-    openDoc(r.content, { name: title || name, baseDir: r.dir });
+    await openDoc(r.content, { name: title || name, baseDir: r.dir });
   }
 
   function suggestedName() {
@@ -2173,8 +2179,12 @@
       }
       e.preventDefault();
       e.stopPropagation();
-      const md = files.find((f) => MD_RE.test(f.name));
-      if (md) { openPath(api.pathForFile(md)); return; }
+      const mds = files.filter((f) => MD_RE.test(f.name));
+      if (mds.length) {
+        // 启用标签页时拖入的多个文档全部打开，否则只打开第一个
+        for (const f of (tabsOn() ? mds : mds.slice(0, 1))) await openPath(api.pathForFile(f));
+        return;
+      }
       const sources = files.filter((x) => IMG_RE.test(x.name)).map((f) => ({ path: api.pathForFile(f) })).filter((s) => s.path);
       insertMarkdown(await insertImages(sources));
     }, true);
@@ -2300,7 +2310,7 @@
     'edit.gotoHeading': () => extras.openPalette('heading'),
     'help.checkUpdate': () => { closeModals(); return extras.checkUpdate(false); },
     'file.preferencesImage': () => openPreferences('image'),
-    'file.close': () => (tabsOn() && tabs.length > 1 ? closeTab() : onBeforeClose()),
+    'file.close': () => (tabs.length > 1 ? closeTab() : onBeforeClose()),
     'file.closeWindow': onBeforeClose,
     'file.reopenClosed': reopenClosedTab,
     'view.nextTab': () => stepTab(1),
