@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.7.0-blue.svg" alt="Version"></a>
+  <a href="https://github.com/Eterna10/Moyu/releases"><img src="https://img.shields.io/badge/version-1.8.0-blue.svg" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg" alt="Platform">
   <img src="https://img.shields.io/badge/electron-45.2.1-47848F.svg?logo=electron" alt="Electron">
@@ -25,8 +25,8 @@ Moyu 是一款功能对标 Typora 的桌面 Markdown 编辑器：文档始终以
 
 | 版本 | 文件名 | 说明 |
 | --- | --- | --- |
-| **安装版（推荐）** | `Moyu-Setup-1.7.0.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
-| **便携版** | `Moyu-1.7.0-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
+| **安装版（推荐）** | `Moyu-Setup-1.8.0.exe` | 中文安装向导，可自定义安装路径，自动创建桌面与开始菜单快捷方式，关联 `.md` / `.markdown` 打开方式，可在系统设置中卸载 |
+| **便携版** | `Moyu-1.8.0-Portable.exe` | 单文件免安装，解压即可运行，随身携带（首次启动解压稍需几秒） |
 
 > **自动更新**：Moyu 每次启动时会检查本仓库的最新发布版本，检查状态（检查中 / 已是最新 / 发现新版本 / 检查失败）显示在底部状态栏；发现新版本时弹窗，可选择「立即更新」「跳过此版本」或「取消」。也可以通过「帮助 → 检查更新」手动检查；安装版通常只需下载约 5 MB 的增量更新包（而不是 120 MB 的完整安装包），下载后校验 SHA-256，重启即完成更新；便携版或 Electron 版本变化时下载完整安装包。
 >
@@ -93,6 +93,7 @@ npm run dist    # 打包并生成安装版、便携版与增量更新包（.asar
 - **源代码模式（Ctrl+/）**：随时一键切换全文档源码，两种模式间光标精确互映射。
 - **全选与空行**：`Ctrl+A` 选中整篇文档（代码块、表格等多行块中先选中块内内容，再按一次选中全文），可整体复制为 Markdown、删除或直接输入替换；空段落中连续回车可新增空行。
 - **文件安全**：自动识别 GBK / GB18030、UTF-16 编码的文件并正确读取（保存为 UTF-8）；保存采用原子写入，且在文件被其他程序改动时先询问而不是直接覆盖。
+- **多标签页**：在一个窗口里同时打开多个文档，每个标签页有自己的撤销记录、光标与滚动位置；`Ctrl+Tab` 切换，`Ctrl+W` 关闭，`Ctrl+Shift+T` 重新打开，可拖动排序；启动时可恢复上次打开的全部标签页。不需要时可在偏好设置中关闭。
 - **右键菜单**：在编辑区点右键可使用拼写建议、剪切 / 复制 / 粘贴、表格操作（插入 / 删除行列、列对齐）、格式、段落与插入；链接、图片、文件树各有对应的菜单。
 - **智能粘贴**：从网页、Word、Excel 复制的内容自动转为 Markdown（标题、列表、表格、链接、代码块、公式）；在选中的文字上粘贴网址直接生成链接；`Ctrl+Shift+V` 粘贴为纯文本。
 - **复制为富文本**（`Ctrl+Shift+C`）：把文档复制成自带排版的富文本，可直接粘贴到 Word、邮件或公众号编辑器；也可复制为 HTML 代码或 Markdown 源码。
@@ -135,6 +136,8 @@ npm run dist    # 打包并生成安装版、便携版与增量更新包（.asar
 ### 📊 格式支持与导出
 - **丰富语法**：GFM 表格、任务复选框、删除线、自动链接转换、代码高亮（190+ 编程语言）、KaTeX 数学公式渲染、Mermaid 流程图/时序图、脚注、`[TOC]` 自动大纲生成、YAML Front Matter、`==文本高亮==`、嵌入式原生 HTML。
 - **导入与导出**：一键导出为排版优美的高保真 HTML（支持一键内嵌 Base64 图片离线自洽）与 PDF 文档（支持纸张尺寸 A4/A5、横向/纵向、边距与页眉页脚定制）。
+- **导出长图（PNG）**：把文档导出成适合在微信、小红书等处分享的图片，可选手机 / 标准 / 宽三种版面与 2 倍清晰度；过长的文档按段落边界自动分成多张。
+- **导出 Word 等格式**：通过 [Pandoc](https://pandoc.org/installing.html)（需另行安装，免费）导出 Word（.docx）、ODT、RTF、EPUB、LaTeX——公式转为 Word 自带的公式，图片嵌入文件。
 
 ### 🎨 主题、背景与字体
 - **外观主题**：内置 GitHub、Newsprint（报刊）、Night（夜间）、Midnight（午夜蓝）等精致主题。

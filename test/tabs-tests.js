@@ -62,6 +62,9 @@ module.exports = async function tabsTests(t) {
   const dirs = await js('Array.from(document.querySelectorAll("#tabbar .tab")).map((x) => (x.querySelector(".tab-dir") || {}).textContent || "")');
   check('标签页：同名文件用所在文件夹区分', (await names()).join() === 'a.md,a.md<,b.md*,c.md' && dirs.join() === 'tabs,sub,,', JSON.stringify(dirs));
   await shot('30-标签页.png');
+  await set({ theme: 'night' });
+  await shot('31-标签页-夜间主题.png');
+  await set({ theme: 'github' });
 
   /* ---------------- 源代码模式 ---------------- */
   await js('__zmark.toggleSource()');

@@ -2064,7 +2064,7 @@
       });
       if (!r) return null;
       if (r.missing) { showPandocHelp(name); return r; }
-      toast(r.warnings && r.warnings.length ? `已导出：${basename(r.path)}（有 ${r.warnings.length} 条警告，例如：${r.warnings[0].slice(0, 60)}）` : '已导出：' + basename(r.path), !!(r.warnings && r.warnings.length));
+      toast(r.warnings && r.warnings.length ? `已导出：${basename(r.path)}（有 ${r.warnings.length} 条警告，例如：${r.warnings[0].slice(0, 60)}）` : '已导出：' + basename(r.path));
       return r;
     } catch (e) {
       toast('导出失败：' + String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true);
