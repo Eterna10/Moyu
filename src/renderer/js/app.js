@@ -1216,7 +1216,7 @@
           <h2>导出</h2>
           <h4 class="pref-h">通用</h4>
           ${row('导出使用的主题', '例如在夜间主题下写作，导出为浅色文档', select('exportTheme', [['current', '跟随当前主题']].concat(themes)))}
-          ${row('导出完成后打开文件', '用系统默认程序打开导出的 HTML / PDF', check('openAfterExport'))}
+          ${row('导出完成后打开文件', '用系统默认程序打开导出的文件', check('openAfterExport'))}
           <h4 class="pref-h">HTML</h4>
           ${row('嵌入本地图片', '图片以 Base64 写入 HTML，得到单个可直接分享的文件', check('exportEmbedImages'))}
           <h4 class="pref-h">PDF</h4>
@@ -1224,6 +1224,12 @@
           ${row('横向页面', '', check('pdfLandscape'))}
           ${row('页边距', '', select('pdfMargin', [['narrow', '窄（约 1 厘米）'], ['normal', '标准（约 1.5 厘米）'], ['wide', '宽（约 2.5 厘米）']]))}
           ${row('页眉页脚', '', select('pdfHeaderFooter', [['none', '无'], ['page', '页脚显示页码'], ['titlePage', '页眉显示标题，页脚显示页码']]))}
+          <h4 class="pref-h">图片（PNG 长图）</h4>
+          ${row('版面宽度', '手机宽度适合在微信、小红书等处分享；过长的文档会按段落自动分成多张', select('exportImageWidth', [['mobile', '手机（480）'], ['standard', '标准（800）'], ['wide', '宽（1100）']]))}
+          ${row('清晰度', '2 倍在高分辨率屏幕和手机上更清晰，文件也更大', num('exportImageScale', [[2, '2 倍（推荐）'], [1, '1 倍']]))}
+          <h4 class="pref-h">Word 与其他格式</h4>
+          <p class="pref-note">导出 Word（.docx）、ODT、RTF、EPUB、LaTeX 由 <a href="https://pandoc.org/installing.html">Pandoc</a> 完成：公式转为 Word 自带的公式，图片嵌入文件。需要先安装 Pandoc（免费）。</p>
+          ${row('Pandoc 的位置', '留空则自动查找（PATH 与默认安装位置）', text('pandocPath', '例如 C:\\Program Files\\Pandoc\\pandoc.exe') + '<span class="pandoc-status" id="pandoc-status"></span>')}
         </section>
 
         <section data-pane="plugins">
@@ -1317,6 +1323,11 @@
         if (a) a.onclick = (ev) => { ev.preventDefault(); api.invoke('shell:open', r.url); };
       };
       $('[data-act=plugin-dir]', el).onclick = () => api.invoke('plugins:openDir');
+      // 导出设置中显示是否找到了 Pandoc（修改路径后重新检测）
+      const pandocCheck = () => api.invoke('export:pandocInfo').then((info) => { const st = $('#pandoc-status', el); if (st) { st.textContent = info ? `✓ 已找到 Pandoc ${info.version}` : '未找到 Pandoc'; st.classList.toggle('ok', !!info); } }).catch(() => {});
+      pandocCheck();
+      const pandocInput = $('[data-k=pandocPath]', el);
+      if (pandocInput) pandocInput.addEventListener('change', () => setTimeout(pandocCheck, 300));
       $('[data-act=plugin-reload]', el).onclick = async () => { await runCommand('plugins.reload'); refreshPluginPane(); };
       $('[data-act=plugin-guide]', el).onclick = (e) => { e.preventDefault(); close(); runCommand('help.pluginGuide'); };
       $('[data-act=plugin-ai]', el).onclick = () => { close(); runCommand('plugins.aiPrompt'); };
@@ -1600,6 +1611,7 @@
       $$('.code-copy', holder).forEach((b) => b.remove());
       $$('a[title^="Ctrl + 单击"]', holder).forEach((a) => a.removeAttribute('title'));
       $$('.task-checkbox', holder).forEach((c) => c.setAttribute('disabled', ''));
+      $$('img[loading]', holder).forEach((im) => im.removeAttribute('loading')); // 导出的页面在隐藏窗口中渲染，懒加载的图片不会加载
       const s = state.settings;
       if (!forPdf) {
         for (const img of $$('img[data-orig-src]', holder)) {
@@ -1649,7 +1661,61 @@
     }
   }
 
+  const PANDOC_KINDS = { docx: ['Word 文档', 'docx'], odt: ['OpenDocument 文本', 'odt'], rtf: ['RTF 文档', 'rtf'], epub: ['EPUB 电子书', 'epub'], latex: ['LaTeX 源文件', 'tex'] };
+
+  /** 没有找到 Pandoc 时的说明 */
+  function showPandocHelp(name) {
+    showModal(`<h3>导出 ${esc(name)} 需要 Pandoc</h3>
+      <p>Moyu 通过 <b>Pandoc</b>（免费的开源文档转换工具）生成 Word、ODT、RTF、EPUB、LaTeX 文件：公式会转成 Word 自带的公式，图片会嵌入到文件中。</p>
+      <p>这台电脑上没有找到 Pandoc。安装后无需任何设置，重新导出即可；如果安装在了不常见的位置，可以在「偏好设置 → 导出」中填写 pandoc.exe 的路径。</p>
+      <p class="update-meta">暂时不想安装？「编辑 → 复制为 → 富文本」可以把文档直接粘贴到 Word 中（公式除外）。</p>
+      <div class="actions"><button class="text-btn" data-act="pref">打开导出设置</button><span style="flex:1"></span><button class="text-btn" data-act="close">关闭</button><button class="text-btn primary" data-act="get">前往 Pandoc 下载页</button></div>`,
+    (el, close) => {
+      el.classList.add('pandoc-modal');
+      $('[data-act=close]', el).onclick = close;
+      $('[data-act=get]', el).onclick = () => { api.invoke('shell:open', 'https://pandoc.org/installing.html'); close(); };
+      $('[data-act=pref]', el).onclick = () => { close(); openPreferences('export'); };
+    });
+  }
+
+  async function exportPandoc(kind, outPath) {
+    const [name, ext] = PANDOC_KINDS[kind];
+    if (!state.sourceMode) editor.dropEmptyActive();
+    const base = (state.filePath ? state.filePath.replace(/\.[^.\\/]+$/, '') : suggestedName().replace(/\.md$/, ''));
+    try {
+      toast(`正在导出 ${name}…`);
+      const r = await api.invoke('export:pandoc', {
+        markdown: getText(), format: kind, defaultPath: base + '.' + ext, outPath, baseDir: state.baseDir,
+        title: docName().replace(/\.(md|markdown|txt)$/i, ''), breaks: state.settings.breaks, supSub: state.settings.supSubSyntax,
+      });
+      if (!r) return null;
+      if (r.missing) { showPandocHelp(name); return r; }
+      toast(r.warnings && r.warnings.length ? `已导出：${basename(r.path)}（有 ${r.warnings.length} 条警告，例如：${r.warnings[0].slice(0, 60)}）` : '已导出：' + basename(r.path), !!(r.warnings && r.warnings.length));
+      return r;
+    } catch (e) {
+      toast('导出失败：' + String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true);
+      return null;
+    }
+  }
+
+  async function exportImage(outPath) {
+    try {
+      const html = await buildExportHtml(true);
+      const base = (state.filePath ? state.filePath.replace(/\.[^.\\/]+$/, '') : suggestedName().replace(/\.md$/, ''));
+      toast('正在导出图片…');
+      const files = await api.invoke('export:image', { html, defaultPath: base + '.png', outPath });
+      if (!files) return null;
+      toast(files.length > 1 ? `文档较长，已分成 ${files.length} 张图片导出：${basename(files[0])} 等` : '已导出：' + basename(files[0]));
+      return files;
+    } catch (e) {
+      toast('导出失败：' + String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true);
+      return null;
+    }
+  }
+
   async function exportDoc(kind, outPath) {
+    if (kind === 'image') return exportImage(outPath);
+    if (PANDOC_KINDS[kind]) return exportPandoc(kind, outPath);
     try {
       const html = await buildExportHtml(kind === 'pdf');
       const base = (state.filePath ? state.filePath.replace(/\.[^.\\/]+$/, '') : suggestedName().replace(/\.md$/, ''));
@@ -1851,6 +1917,12 @@
     'file.toggleAutoSave': () => { setSetting({ autoSave: !state.settings.autoSave }); toast(state.settings.autoSave ? '已开启自动保存' : '已关闭自动保存'); },
     'file.exportHtml': () => exportDoc('html'),
     'file.exportPdf': () => exportDoc('pdf'),
+    'file.exportImage': () => exportDoc('image'),
+    'file.exportDocx': () => exportDoc('docx'),
+    'file.exportOdt': () => exportDoc('odt'),
+    'file.exportRtf': () => exportDoc('rtf'),
+    'file.exportEpub': () => exportDoc('epub'),
+    'file.exportLatex': () => exportDoc('latex'),
     'file.reveal': () => { if (state.filePath) api.invoke('shell:reveal', state.filePath); else toast('文档尚未保存'); },
     'file.preferences': () => openPreferences(),
     'file.preferencesTheme': () => { closeModals(); openPreferences('theme'); },
@@ -2131,7 +2203,7 @@
     // 上次没有正常退出时，提示恢复未保存的内容（只在程序启动时的首个窗口检查）
     if (!state.selfTest && initial.startup) ws.showRecovery(false);
     // 供自检脚本使用
-    window.__zmark = { ws, docName, extras, refreshFonts, editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, exportDoc, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
+    window.__zmark = { ws, docName, openPreferences, exportDoc, extras, refreshFonts, editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
     document.body.dataset.ready = '1';
     hideSplash();
   }

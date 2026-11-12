@@ -76,6 +76,18 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     for (let i = 0; i < 50 && !(await js('!!document.querySelector("#write .mermaid-block svg, #write .mermaid-error")')); i++) await wait(200);
     await wait(400); // 等待大纲 / 字数统计的防抖刷新
 
+    // 分组的测试（各自一个文件）。MOYU_TEST_ONLY=名称[,名称] 只运行指定的组，开发时缩短等待；发布前必须运行完整自检
+    const T = { js, wc, win, check, wait, key, type, text, val, OUT, DOC, ROOT, shot, app, clickAt };
+    const groups = {
+      workspace: () => require('./workspace-tests.js')(T),
+      export: () => require('./export-tests.js')(T),
+      tabs: () => require('./tabs-tests.js')(T),
+    };
+    if (process.env.MOYU_TEST_ONLY) {
+      for (const g of process.env.MOYU_TEST_ONLY.split(',')) await groups[g.trim()]();
+      return;
+    }
+
     /* ---------- 渲染 ---------- */
     const r = await js(`(() => {
       const w = document.querySelector('#write');
@@ -344,7 +356,8 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     await themeFontTests();
     await updateTests();
     await featureTests();
-    await require('./workspace-tests.js')({ js, wc, win, check, wait, key, type, text, val, OUT, shot, app });
+    await groups.workspace();
+    await groups.export();
 
     /* ---------- 偏好设置选项 ---------- */
     await settingsTests();

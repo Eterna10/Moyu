@@ -10,7 +10,7 @@ const INVOKE = new Set([
   'theme:pickBackground', 'theme:bgUrl', 'theme:bgData', 'theme:export', 'theme:import', 'font:list', 'font:import', 'font:remove', 'font:dataUrl',
   'update:check', 'update:download', 'update:cancel', 'update:install', 'history:list', 'history:read', 'history:snapshot', 'history:clear',
   'app:addRecent', 'app:copyText', 'app:readAsset', 'app:info', 'app:helpDoc',
-  'export:html', 'export:pdf', 'shell:open', 'shell:reveal',
+  'export:html', 'export:pdf', 'export:image', 'export:pandoc', 'export:pandocInfo', 'shell:open', 'shell:reveal',
   'fs:newFolder', 'fs:rename', 'fs:trash', 'fs:search', 'recovery:save', 'recovery:clear', 'recovery:list', 'recovery:read',
   'menu:popup', 'edit:exec', 'spell:replace', 'spell:add',
 ]);

@@ -584,3 +584,9 @@ body.has-bg.bg-panels #sidebar, body.has-bg.bg-panels #statusbar {
 .recover-path, .recover-preview { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 .recover-preview { color: var(--text-soft); }
 .recover-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+
+/* ---------- 导出：Pandoc 状态 ---------- */
+.pandoc-status { display: block; font-size: 12px; color: #d4881c; margin-top: 4px; }
+.pandoc-status.ok { color: #2da44e; }
+.modal.pandoc-modal { width: min(560px, 92vw); }
+.modal.pandoc-modal p { line-height: 1.75; }

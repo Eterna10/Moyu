@@ -10,6 +10,7 @@ const appearance = require('./appearance');
 const updater = require('./updater');
 const history = require('./history');
 const workspace = require('./workspace');
+const exporter = require('./exporter');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SELF_TEST = process.argv.includes('--self-test');
@@ -91,6 +92,9 @@ const DEFAULTS = {
   pdfMargin: 'normal', // narrow | normal | wide
   pdfHeaderFooter: 'none', // none | page | titlePage
   exportEmbedImages: false,
+  exportImageWidth: 'standard', // 导出图片的版面宽度：mobile | standard | wide
+  exportImageScale: 2, // 导出图片的清晰度：1 | 2
+  pandocPath: '', // Pandoc 的位置（留空自动查找），用于导出 Word 等格式
   openAfterExport: false,
   // 个性化：背景图片与配色
   bgImage: '',
@@ -483,6 +487,7 @@ function registerIpc() {
 
   // 导出后按设置用系统默认程序打开（自检时不打开）
   const afterExport = (p) => { if (settings.openAfterExport && !SELF_TEST) shell.openPath(p); return p; };
+  exporter.register(h, { focusedWin, afterExport, getSettings: () => settings, noPandoc: () => SELF_TEST && process.env.MOYU_NO_PANDOC === '1' });
   h('export:html', async (e, { html, defaultPath, outPath }) => {
     let target = outPath;
     if (!target) {

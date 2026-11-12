@@ -12,7 +12,7 @@
   const COMMANDS = [
     ['file.new', '新建文档', 'Ctrl+N'], ['file.open', '打开文件…', 'Ctrl+O'], ['file.openFolder', '打开文件夹…', 'Ctrl+Shift+O'],
     ['file.save', '保存', 'Ctrl+S'], ['file.saveAs', '另存为…', 'Ctrl+Shift+S'], ['file.toggleAutoSave', '开关自动保存', ''],
-    ['file.history', '历史版本…', '', 'history version 恢复'], ['file.exportHtml', '导出 HTML…', '', 'export'], ['file.exportPdf', '导出 PDF…', 'Ctrl+Shift+P', 'export'],
+    ['file.history', '历史版本…', '', 'history version 恢复'], ['file.exportHtml', '导出 HTML…', '', 'export'], ['file.exportImage', '导出图片（PNG 长图）…', '', 'export image png 长图 分享'], ['file.exportDocx', '导出 Word（.docx）…', '', 'export word docx pandoc'], ['file.exportEpub', '导出 EPUB 电子书…', '', 'export epub'], ['file.exportLatex', '导出 LaTeX…', '', 'export tex latex'], ['file.exportPdf', '导出 PDF…', 'Ctrl+Shift+P', 'export'],
     ['file.reveal', '在资源管理器中显示', ''], ['file.preferences', '偏好设置…', 'Ctrl+,', 'settings 设置'], ['file.preferencesTheme', '主题与外观…', '', 'theme background 背景 字体'],
     ['edit.undo', '撤销', 'Ctrl+Z'], ['edit.redo', '重做', 'Ctrl+Y'], ['edit.selectAll', '全选', 'Ctrl+A', 'select all'], ['edit.findInFolder', '在文件夹中查找…', 'Ctrl+Shift+F', 'search grep 全文搜索'], ['edit.copyRich', '复制为富文本（Word、邮件、公众号）', 'Ctrl+Shift+C', 'copy rich word wechat'], ['edit.copyHtml', '复制为 HTML 代码', '', 'copy html'], ['edit.copyMarkdown', '复制 Markdown 源码', '', 'copy markdown'], ['edit.pastePlain', '粘贴为纯文本', 'Ctrl+Shift+V', 'paste plain'], ['file.recover', '恢复未保存的文档…', '', 'recover 崩溃 恢复'], ['edit.gotoHeading', '跳转到标题…', 'Ctrl+G', 'goto heading outline 大纲'], ['edit.find', '查找', 'Ctrl+F', 'search'], ['edit.replace', '替换', 'Ctrl+H'],
     ['para.h1', '一级标题', 'Ctrl+1', 'heading'], ['para.h2', '二级标题', 'Ctrl+2', 'heading'], ['para.h3', '三级标题', 'Ctrl+3', 'heading'],
