@@ -83,18 +83,6 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
       export: () => require('./export-tests.js')(T),
       perf: () => perfTests(),
       settings: () => settingsTests(),
-      manytabs: async () => {
-        const d = path.join(OUT, 'many');
-        fs.mkdirSync(d, { recursive: true });
-        for (let i = 0; i < 50; i++) {
-          const f = path.join(d, `doc-${i}.md`);
-          fs.writeFileSync(f, ['# 文档 ' + i, ''].concat(Array.from({ length: 60 }, (_, k) => `第 ${k} 段内容，用于测试。
-`)).join('
-'));
-          await js(`__zmark.openPath(${JSON.stringify(f)})`);
-        }
-        console.log('    标签页数量：' + (await js('__zmark.tabs.list().length')));
-      },
       feature: () => featureTests(),
       rich: () => richTests(),
       tabs: () => require('./tabs-tests.js')(T),
