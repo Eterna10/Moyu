@@ -5,13 +5,18 @@ const { execFileSync } = require('child_process');
 const { nativeImage } = require('electron');
 
 module.exports = async function exportTests(t) {
-  const { js, check, wait, key, OUT, DOC, ROOT } = t;
+  const { js, check, wait, key, OUT, ROOT } = t;
   const set = async (patch) => { await js(`__zmark.setSetting(${JSON.stringify(patch)})`); await wait(150); };
   const load = (md, meta) => js(`__zmark.loadText(${JSON.stringify(md)}, ${JSON.stringify(meta || {})})`);
   const exporter = require(path.join(ROOT, 'src', 'main', 'exporter.js'));
   const dir = path.join(OUT, 'export');
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
+  // 导出用的文档：欢迎文档 + 一张本地图片
+  const DOC = path.join(dir, '欢迎.md');
+  fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'assets', 'pic.png'), nativeImage.createFromPath(path.join(ROOT, 'build', 'icon.png')).resize({ width: 96, height: 96 }).toPNG());
+  fs.writeFileSync(DOC, fs.readFileSync(path.join(ROOT, 'samples', '欢迎使用 Moyu.md'), 'utf8').replace('## 快速上手', '本地图片：![logo](assets/pic.png)\n\n## 快速上手'), 'utf8');
   const sizeOf = (f) => nativeImage.createFromPath(f).getSize();
   /** 图片某一行是否为单一颜色（即没有切在文字或图形中间） */
   const rowUniform = (f, y) => {
@@ -34,7 +39,7 @@ module.exports = async function exportTests(t) {
   await set({ exportImageWidth: 'standard', exportImageScale: 2, theme: 'github' });
   await js(`__zmark.openPath(${JSON.stringify(DOC)}, { force: true, skipConfirm: true })`);
   for (let i = 0; i < 50 && !(await js('!!document.querySelector("#write .mermaid-block svg, #write .mermaid-error")')); i++) await wait(200);
-  const one = path.join(dir, '欢迎.png');
+  const one = path.join(dir, '欢迎-标准.png');
   let files = await js(`__zmark.exportDoc('image', ${JSON.stringify(one)})`);
   let sz = files && files.length === 1 ? sizeOf(files[0]) : null;
   check('导出图片：标准宽度 2 倍清晰度（1600 像素宽的单张长图）', !!sz && sz.width === 1600 && sz.height > 3000 && sz.height <= 12000 && fs.statSync(one).size > 100000, JSON.stringify({ files, sz }));

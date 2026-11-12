@@ -226,28 +226,374 @@
     }).join('\n');
   }
 
-  function loadText(content, meta) {
+  /** 由文件内容得到一份文档的各项状态（换行符、末尾换行、路径等） */
+  function docFields(content, meta) {
     meta = meta || {};
-    saveScroll(); // 离开当前文档前记下读到的位置
-    // 已有文件保持原换行符；新文件使用「新建文件的换行符」设置
-    state.eol = meta.filePath ? (/\r\n/.test(content) ? '\r\n' : '\n') : (state.settings.defaultEol === 'CRLF' ? '\r\n' : '\n');
     let t = content.replace(/\r\n?/g, '\n');
-    state.trailingNewline = meta.filePath ? t.endsWith('\n') : true;
+    const trailingNewline = meta.filePath ? t.endsWith('\n') : true;
     if (t.endsWith('\n')) t = t.slice(0, -1);
-    state.filePath = meta.filePath || null;
-    state.displayName = meta.name || null;
-    state.mtime = meta.mtime || null;
-    state.baseDir = meta.baseDir || dirname(meta.filePath) || null;
-    state.savedText = meta.markDirty ? null : t;
+    return {
+      // 已有文件保持原换行符；新文件使用「新建文件的换行符」设置
+      eol: meta.filePath ? (/\r\n/.test(content) ? '\r\n' : '\n') : (state.settings.defaultEol === 'CRLF' ? '\r\n' : '\n'),
+      trailingNewline,
+      filePath: meta.filePath || null,
+      displayName: meta.name || null,
+      mtime: meta.mtime || null,
+      baseDir: meta.baseDir || dirname(meta.filePath) || null,
+      savedText: meta.markDirty ? null : t,
+      text: t,
+    };
+  }
+
+  /** 把内容载入当前标签页（替换其中的文档） */
+  function loadText(content, meta) {
+    saveScroll(); // 离开当前文档前记下读到的位置
+    const d = docFields(content, meta);
+    for (const k of DOC_KEYS) state[k] = d[k];
+    const t = d.text;
     editor.setMarkdown(t, { baseDir: state.baseDir });
     if (state.sourceMode) { source.value = t; source.focus(0); $('#source').scrollTop = 0; }
+    lastTitle = '';
     updateTitle();
     refreshDerived();
     markTreeCurrent();
     restoreScroll();
+    saveSession();
     bus.emit('open', { filePath: state.filePath, name: docName() });
     if (ws) ws.touchRecovery();
   }
+
+  /* ======================= 标签页 ======================= */
+
+  // 每个标签页是一份文档。当前标签页的状态就在 state / editor 里；其余标签页的状态存放在各自的对象中，
+  // 切换时换出当前的、换入目标的（文本、撤销记录、光标、滚动位置各自独立）。
+  const DOC_KEYS = ['filePath', 'displayName', 'baseDir', 'savedText', 'eol', 'trailingNewline', 'mtime'];
+  const tabs = [];
+  let activeTab = null;
+  let tabSeq = 0;
+  const closedTabs = []; // 最近关闭的文件，用于「重新打开关闭的标签页」
+  const samePath = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+  const tabsOn = () => state.settings.tabs !== false;
+
+  function newTab() {
+    return {
+      id: ++tabSeq,
+      rkey: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10), // 崩溃恢复用的标识
+      filePath: null, displayName: null, baseDir: null, savedText: '', eol: '\n', trailingNewline: true, mtime: null,
+      text: '', history: [], future: [], scrollTop: 0, caret: null,
+    };
+  }
+  const tabPath = (t) => (t === activeTab ? state.filePath : t.filePath);
+  const tabDirty = (t) => (t === activeTab ? isDirty() : t.text !== t.savedText);
+  const tabName = (t) => { const p = tabPath(t); return p ? basename(p) : ((t === activeTab ? state.displayName : t.displayName) || '未命名'); };
+  const tabById = (id) => tabs.find((t) => t.id === Number(id));
+
+  /** 把当前文档的状态存回它的标签页 */
+  function stashActive() {
+    const t = activeTab;
+    if (!t) return;
+    t.caret = !state.sourceMode && editor.isEditing() && editor.hl.value.trim() ? editor.snapshot().active : null;
+    t.scrollTop = state.sourceMode ? $('#source').scrollTop : $('#content').scrollTop;
+    if (!state.sourceMode) editor.dropEmptyActive();
+    for (const k of DOC_KEYS) t[k] = state[k];
+    t.text = getText();
+    t.history = editor.history;
+    t.future = editor.future;
+  }
+
+  /** 把标签页的状态换入 state / editor，使它成为当前文档 */
+  function restoreTab(t) {
+    activeTab = t;
+    for (const k of DOC_KEYS) state[k] = t[k];
+    editor.setMarkdown(t.text, { baseDir: state.baseDir });
+    editor.history = t.history || [];
+    editor.future = t.future || [];
+    if (state.sourceMode) { source.value = t.text; source.focus(0); }
+    else if (t.caret && t.text.trim()) {
+      try { editor.activateRange(t.caret.start, t.caret.start + t.caret.len, t.caret.s, t.caret.e); } catch (e) { /* 光标位置已失效 */ }
+    }
+    (state.sourceMode ? $('#source') : $('#content')).scrollTop = t.scrollTop || 0;
+    lastTitle = '';
+    updateTitle();
+    refreshDerived();
+    markTreeCurrent();
+    saveSession();
+    bus.emit('open', { filePath: state.filePath, name: docName() });
+    if (!$('#findbar').hidden) runFind(false, true);
+    checkExternalChange(); // 在后台期间文件可能被其它程序改动
+  }
+
+  let switching = Promise.resolve();
+  /** 切换到指定的标签页（依次执行，避免连续点击时交错） */
+  function switchTab(t) {
+    switching = switching.then(async () => {
+      if (!t || t === activeTab || !tabs.includes(t)) return;
+      // 开着自动保存时，离开前先把修改写入磁盘
+      if (state.settings.autoSave && state.filePath && isDirty()) await save(false, true);
+      saveScroll();
+      stashActive();
+      restoreTab(t);
+    }).catch((e) => console.error('切换标签页失败', e));
+    return switching;
+  }
+
+  /** 准备一个用来载入新文档的标签页：当前是空白的新文档时直接复用，否则在它后面新建一个 */
+  function prepareTab() {
+    const pristine = !state.filePath && !state.displayName && !isDirty() && !getText().trim();
+    if (pristine) return;
+    saveScroll();
+    stashActive();
+    const t = newTab();
+    tabs.splice(tabs.indexOf(activeTab) + 1, 0, t);
+    activeTab = t;
+  }
+
+  /** 在标签页中打开一份内容（未启用标签页时替换当前文档） */
+  function openDoc(content, meta) {
+    if (tabsOn()) prepareTab();
+    loadText(content, meta);
+  }
+
+  /** 关闭标签页；有未保存的修改时先询问。返回 false 表示用户取消 */
+  async function closeTab(t) {
+    t = t || activeTab;
+    if (!tabs.includes(t)) return false;
+    if (tabDirty(t)) {
+      if (t !== activeTab) await switchTab(t);
+      if (!(await confirmDiscard())) return false;
+    }
+    const fp = tabPath(t);
+    if (fp) { closedTabs.push(fp); if (closedTabs.length > 20) closedTabs.shift(); }
+    if (ws) ws.dropRecovery(t.rkey);
+    const i = tabs.indexOf(t);
+    if (tabs.length === 1) {
+      // 最后一个标签页：换成一份空白文档，窗口保持打开
+      saveScroll();
+      activeTab = newTab();
+      tabs[0] = activeTab;
+      loadText('', {});
+      return true;
+    }
+    if (t === activeTab) {
+      saveScroll();
+      tabs.splice(i, 1);
+      restoreTab(tabs[Math.min(i, tabs.length - 1)]);
+    } else {
+      tabs.splice(i, 1);
+      renderTabs();
+      saveSession();
+    }
+    return true;
+  }
+
+  /** 依次关闭一组标签页，用户取消其中一个时停止 */
+  async function closeTabs(list) {
+    for (const t of list) if (tabs.includes(t) && !(await closeTab(t))) return false;
+    return true;
+  }
+
+  function stepTab(dir) {
+    if (tabs.length < 2) return undefined;
+    return switchTab(tabs[(tabs.indexOf(activeTab) + dir + tabs.length) % tabs.length]);
+  }
+
+  async function reopenClosedTab() {
+    while (closedTabs.length) {
+      const p = closedTabs.pop();
+      if (tabs.some((t) => samePath(tabPath(t), p))) continue;
+      if (await api.invoke('fs:exists', p)) { await openPath(p); return true; }
+    }
+    toast('没有可以重新打开的标签页');
+    return false;
+  }
+
+  /** 把标签页移到另一个标签页之前（before 为 null 时移到末尾） */
+  function moveTab(t, before) {
+    if (!t || t === before) return;
+    tabs.splice(tabs.indexOf(t), 1);
+    const i = before ? tabs.indexOf(before) : -1;
+    tabs.splice(i < 0 ? tabs.length : i, 0, t);
+    renderTabs();
+    saveSession();
+  }
+
+  /** 关闭窗口前：逐个确认有未保存修改的标签页 */
+  async function confirmAllTabs() {
+    for (const t of [activeTab].concat(tabs.filter((x) => x !== activeTab))) {
+      if (!tabs.includes(t) || !tabDirty(t)) continue;
+      if (t !== activeTab) await switchTab(t);
+      if (!(await confirmDiscard())) return false;
+    }
+    return true;
+  }
+
+  let tabsSig = null;
+  function renderTabs() {
+    const bar = $('#tabbar');
+    if (!bar || !activeTab) return;
+    const show = tabsOn() && tabs.length > 1;
+    const names = tabs.map(tabName);
+    const sig = show ? tabs.map((t, i) => [t.id, names[i], tabPath(t) || '', tabDirty(t) ? 1 : 0, t === activeTab ? 1 : 0].join('|')).join('\n') : '';
+    if (sig === tabsSig) return;
+    tabsSig = sig;
+    bar.hidden = !show;
+    $('#content-wrap').classList.toggle('has-tabs', show);
+    if (!show) { bar.innerHTML = ''; return; }
+    bar.innerHTML = tabs.map((t, i) => {
+      const fp = tabPath(t);
+      // 同名的文件用所在文件夹区分
+      const dir = fp && names.filter((n) => n === names[i]).length > 1 ? basename(dirname(fp)) : '';
+      return `<div class="tab${t === activeTab ? ' active' : ''}${tabDirty(t) ? ' dirty' : ''}" data-id="${t.id}" draggable="true" title="${esc(fp || names[i])}">` +
+        `<span class="tab-name">${esc(names[i])}${dir ? `<span class="tab-dir">${esc(dir)}</span>` : ''}</span><button class="tab-close" title="关闭（Ctrl+W）" tabindex="-1"></button></div>`;
+    }).join('') + '<button class="tab-new" title="新建标签页（Ctrl+N）" tabindex="-1">＋</button>';
+    const a = $('.tab.active', bar);
+    if (a) a.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function bindTabs() {
+    const bar = $('#tabbar');
+    bar.addEventListener('click', (e) => {
+      if (e.target.closest('.tab-new')) { newDoc(); return; }
+      const el = e.target.closest('.tab');
+      if (!el) return;
+      const t = tabById(el.dataset.id);
+      if (e.target.closest('.tab-close')) closeTab(t);
+      else switchTab(t);
+    });
+    // 鼠标中键关闭
+    bar.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+    bar.addEventListener('auxclick', (e) => { const el = e.target.closest('.tab'); if (e.button === 1 && el) closeTab(tabById(el.dataset.id)); });
+    bar.addEventListener('dblclick', (e) => { if (e.target === bar) newDoc(); });
+    bar.addEventListener('wheel', (e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) bar.scrollLeft += e.deltaY; }, { passive: true });
+    // 拖动调整顺序
+    let dragId = null;
+    const clearMarks = () => $$('.tab.drop-before, .tab.drop-after', bar).forEach((x) => x.classList.remove('drop-before', 'drop-after'));
+    bar.addEventListener('dragstart', (e) => {
+      const el = e.target.closest('.tab');
+      if (!el) return;
+      dragId = el.dataset.id;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/x-moyu-tab', dragId);
+    });
+    bar.addEventListener('dragover', (e) => {
+      if (!dragId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      clearMarks();
+      const el = e.target.closest('.tab');
+      if (!el || el.dataset.id === dragId) return;
+      const r = el.getBoundingClientRect();
+      el.classList.add(e.clientX < r.left + r.width / 2 ? 'drop-before' : 'drop-after');
+    });
+    bar.addEventListener('drop', (e) => {
+      if (!dragId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const el = e.target.closest('.tab');
+      const moved = tabById(dragId);
+      if (el && el.dataset.id !== dragId) {
+        const r = el.getBoundingClientRect();
+        const target = tabById(el.dataset.id);
+        moveTab(moved, e.clientX < r.left + r.width / 2 ? target : (tabs[tabs.indexOf(target) + 1] || null));
+      } else if (!el) moveTab(moved, null);
+      clearMarks();
+      dragId = null;
+    });
+    bar.addEventListener('dragend', () => { clearMarks(); dragId = null; });
+  }
+
+  /** 标签页的右键菜单 */
+  function tabMenu(id) {
+    const t = tabById(id);
+    if (!t) return null;
+    const fp = tabPath(t);
+    const i = tabs.indexOf(t);
+    return {
+      items: [
+        { id: 'close', label: '关闭', accelerator: 'Ctrl+W' },
+        { id: 'others', label: '关闭其他标签页', enabled: tabs.length > 1 },
+        { id: 'right', label: '关闭右侧的标签页', enabled: i < tabs.length - 1 },
+        { type: 'separator' },
+        { id: 'copy', label: '复制路径', enabled: !!fp },
+        { id: 'reveal', label: '在资源管理器中显示', enabled: !!fp },
+      ],
+      run: async (act) => {
+        if (act === 'close') return closeTab(t);
+        if (act === 'others') return closeTabs(tabs.filter((x) => x !== t));
+        if (act === 'right') return closeTabs(tabs.slice(i + 1));
+        if (act === 'copy') { await api.invoke('app:copyText', fp); return toast('已复制路径'); }
+        if (act === 'reveal') return api.invoke('shell:reveal', fp);
+        return undefined;
+      },
+    };
+  }
+
+  /** 记住打开着哪些文件，供「启动时：重新打开上次的文件」恢复 */
+  function saveSession() {
+    if (!activeTab) return;
+    const files = tabs.map(tabPath).filter(Boolean);
+    const active = tabPath(activeTab) || null;
+    const cur = state.settings.sessionTabs || [];
+    if (files.join('\n') === cur.join('\n') && (state.settings.sessionActive || null) === active) return;
+    setSetting({ sessionTabs: files, sessionActive: active });
+  }
+
+  /** 启动时恢复上次打开的标签页：只有当前的那个立即渲染，其余的在后台备好 */
+  async function restoreSession() {
+    const list = tabsOn() && (state.settings.sessionTabs || []).length ? state.settings.sessionTabs : (state.settings.lastFile ? [state.settings.lastFile] : []);
+    const want = state.settings.sessionActive || state.settings.lastFile;
+    const restored = [];
+    for (const p of list.slice(0, 30)) {
+      try {
+        if (restored.some((t) => samePath(t.filePath, p))) continue;
+        if (!(await api.invoke('fs:exists', p))) continue; // 文件已不存在
+        const r = await api.invoke('fs:read', p);
+        if (r.lossy) continue;
+        restored.push(Object.assign(newTab(), docFields(r.content, { filePath: p, mtime: r.mtime })));
+      } catch (e) { /* 文件已不存在 */ }
+    }
+    if (!restored.length) return false;
+    tabs.splice(0, tabs.length, ...restored);
+    restoreTab(restored.find((t) => samePath(t.filePath, want)) || restored[0]);
+    return true;
+  }
+
+  /** 文件（或其所在的文件夹）被改名：所有打开着它的标签页跟随到新路径 */
+  function relocatePath(from, to) {
+    const inside = (p) => !!p && (p === from || p.startsWith(from + '\\') || p.startsWith(from + '/'));
+    for (const t of tabs) {
+      if (t === activeTab || !inside(t.filePath)) continue;
+      t.filePath = to + t.filePath.slice(from.length);
+      t.baseDir = dirname(t.filePath);
+    }
+    if (inside(state.filePath)) relocate(to + state.filePath.slice(from.length));
+    renderTabs();
+    saveSession();
+  }
+
+  /** 文件（或其所在的文件夹）被删除：打开着它的标签页保留内容，变成尚未保存的新文档 */
+  function detachPath(base) {
+    const inside = (p) => !!p && (p === base || p.startsWith(base + '\\') || p.startsWith(base + '/'));
+    for (const t of tabs) {
+      if (t === activeTab || !inside(t.filePath)) continue;
+      t.displayName = basename(t.filePath);
+      t.filePath = null;
+      t.mtime = null;
+      t.savedText = null;
+    }
+    if (inside(state.filePath)) detach();
+    renderTabs();
+    saveSession();
+  }
+
+  /** 供崩溃恢复使用：所有标签页中的文档 */
+  function recoveryDocs() {
+    return tabs.map((t) => ({
+      key: t.rkey, active: t === activeTab, dirty: tabDirty(t),
+      filePath: tabPath(t), name: tabName(t), text: t === activeTab ? getText() : t.text,
+    }));
+  }
+
 
   /* 阅读位置：记住每个文件滚动到的位置（最近 200 个），重新打开时回到那里 */
   let positionTimer = 0;
@@ -287,13 +633,24 @@
     return r === 1;
   }
 
+  /**
+   * 打开文件。启用标签页时：已经打开的文件切换到它所在的标签页，否则在新标签页中打开（当前是空白文档时复用）。
+   * opts.force：即使已经打开也从磁盘重新载入；opts.skipConfirm：重新载入时不询问未保存的修改。
+   */
   async function openPath(p, opts) {
     opts = opts || {};
     if (!p) return;
-    if (p === state.filePath && !opts.force) return;
-    if (!opts.skipConfirm && !(await confirmDiscard())) return;
+    if (samePath(p, state.filePath) && !opts.force) return;
+    if (tabsOn() && !samePath(p, state.filePath)) {
+      const other = tabs.find((t) => t !== activeTab && samePath(t.filePath, p));
+      if (other) { await switchTab(other); if (!opts.force) return; }
+    }
+    // 重新载入当前文档，或未启用标签页：替换当前文档，先确认未保存的修改
+    const inPlace = !tabsOn() || samePath(p, state.filePath);
+    if (inPlace && !opts.skipConfirm && !(await confirmDiscard())) return;
     try {
       const r = await api.invoke('fs:read', p);
+      if (!inPlace) prepareTab();
       if (r.lossy) {
         // 无法识别编码：作为未命名的副本打开，保存时需另选位置，原文件不会被覆盖
         loadText(r.content, { name: basename(p).replace(/(\.[^.]+)?$/, '（副本）$1'), baseDir: dirname(p) });
@@ -316,14 +673,19 @@
   }
 
   async function newDoc() {
+    if (tabsOn()) { prepareTab(); loadText('', {}); return; }
     if (!(await confirmDiscard())) return;
     loadText('', {});
   }
 
   async function openHelp(name, title) {
-    if (!(await confirmDiscard())) return;
+    if (tabsOn()) {
+      // 已经打开且没有改动过的帮助文档：直接切换过去
+      const shown = tabs.find((t) => !tabPath(t) && (t === activeTab ? state.displayName : t.displayName) === (title || name) && !tabDirty(t));
+      if (shown) { await switchTab(shown); return; }
+    } else if (!(await confirmDiscard())) return;
     const r = await api.invoke('app:helpDoc', name);
-    loadText(r.content, { name: title || name, baseDir: r.dir });
+    openDoc(r.content, { name: title || name, baseDir: r.dir });
   }
 
   function suggestedName() {
@@ -378,6 +740,9 @@
         api.invoke('app:addRecent', p);
         rememberLastFile(p);
         if (state.folder && p.startsWith(state.folder)) loadFolder(state.folder);
+        // 另存到了另一个标签页打开着的文件上：去掉那个没有改动的标签页，避免同一文件开着两份
+        for (const t of tabs.filter((x) => x !== activeTab && samePath(x.filePath, p) && !tabDirty(x))) tabs.splice(tabs.indexOf(t), 1);
+        saveSession();
       }
       updateTitle();
       if (!quiet) toast('已保存');
@@ -425,7 +790,7 @@
 
   async function onBeforeClose() {
     let ok = true;
-    try { ok = await confirmDiscard(); } catch (e) { ok = true; } // 初始化失败时也必须能关闭窗口
+    try { ok = await confirmAllTabs(); } catch (e) { ok = true; } // 初始化失败时也必须能关闭窗口
     if (ok) { saveScroll(); if (ws) await ws.clearRecovery(); api.invoke('win:close'); }
   }
 
@@ -440,6 +805,7 @@
     const s = $('#sb-save');
     s.classList.toggle('dirty', dirty);
     s.textContent = dirty ? '未保存' : (state.filePath ? (state.settings.autoSave ? '已自动保存' : '已保存') : '新文档');
+    renderTabs();
   }
 
   const CJK = /[㐀-鿿豈-﫿぀-ヿ가-힯　-〿＀-￯]/g;
@@ -1065,7 +1431,8 @@
           <h2>通用</h2>
           <h4 class="pref-h">启动</h4>
           ${row('启动时显示开启动画', '启动 Moyu 时显示带图标的开启动画（约 1 秒，不影响加载速度）', check('showSplash'))}
-          ${row('启动时', '', select('startupAction', [['new', '打开空白文档'], ['restoreLast', '重新打开上次的文件'], ['welcome', '打开欢迎文档']]))}
+          ${row('启动时', '', select('startupAction', [['new', '打开空白文档'], ['restoreLast', '重新打开上次的文件（含所有标签页）'], ['welcome', '打开欢迎文档']]))}
+          ${row('在标签页中打开文档', '打开文件时保留已经打开的文档，可用 Ctrl+Tab 切换；关闭后每个窗口只编辑一个文档', check('tabs'))}
           ${row('记住阅读位置', '重新打开文件时回到上次滚动到的位置', check('restoreScroll'))}
           ${row('最近文件数量', '「文件 → 最近打开」中保留的文件数', num('recentLimit', [[5, '5'], [10, '10'], [15, '15'], [20, '20'], [30, '30']]))}
           <h4 class="pref-h">保存</h4>
@@ -1552,6 +1919,7 @@
     const rows = [
       ['文件'],
       ['新建 / 新建窗口', 'Ctrl+N / Ctrl+Shift+N'], ['打开 / 打开文件夹', 'Ctrl+O / Ctrl+Shift+O'],
+      ['下一个 / 上一个标签页', 'Ctrl+Tab / Ctrl+Shift+Tab'], ['关闭标签页 / 关闭窗口', 'Ctrl+W / Ctrl+Shift+W'], ['重新打开关闭的标签页', 'Ctrl+Shift+T'],
       ['保存 / 另存为', 'Ctrl+S / Ctrl+Shift+S'], ['快速打开（输入 > 搜索命令）', 'Ctrl+P'], ['命令面板', 'F1'], ['导出 PDF', 'Ctrl+Shift+P'], ['偏好设置', 'Ctrl+,'], ['关闭窗口', 'Ctrl+W'],
       ['编辑'],
       ['撤销 / 重做', 'Ctrl+Z / Ctrl+Y（或 Ctrl+Shift+Z）'], ['查找 / 替换', 'Ctrl+F / Ctrl+H'], ['查找下一个 / 上一个', 'F3 / Shift+F3'],
@@ -1932,7 +2300,11 @@
     'edit.gotoHeading': () => extras.openPalette('heading'),
     'help.checkUpdate': () => { closeModals(); return extras.checkUpdate(false); },
     'file.preferencesImage': () => openPreferences('image'),
-    'file.close': onBeforeClose,
+    'file.close': () => (tabsOn() && tabs.length > 1 ? closeTab() : onBeforeClose()),
+    'file.closeWindow': onBeforeClose,
+    'file.reopenClosed': reopenClosedTab,
+    'view.nextTab': () => stepTab(1),
+    'view.prevTab': () => stepTab(-1),
     // 焦点在查找框等界面输入框中时，撤销 / 重做作用于该输入框而不是文档
     'edit.undo': () => {
       if (uiInputFocused() && !lastActionWasReplace()) document.execCommand('undo');
@@ -2069,6 +2441,8 @@
       onSmartPaste: (e) => (ws ? ws.smartPaste(e) : false),
       onSelection,
     });
+    activeTab = newTab();
+    tabs.push(activeTab);
     editor.setOptions(Object.assign({ typewriter: state.settings.typewriter, spellcheck: state.settings.spellcheck }, pick(state.settings, EDITOR_KEYS)));
 
     source = new ZHL.HLTextarea({ className: 'md-source', spellcheck: state.settings.spellcheck, placeholder: '在此输入 Markdown 源码…' });
@@ -2099,6 +2473,7 @@
     $('#source').addEventListener('click', (e) => { if (e.target === $('#source') || e.target.classList.contains('source-inner')) source.focus(source.value.length); });
 
     bindSidebar();
+    bindTabs();
     bindFind();
     bindDrop();
     $('#sb-sidebar').onclick = () => runCommand('view.sidebar');
@@ -2119,6 +2494,13 @@
         e.preventDefault();
         runCommand(e.key.toLowerCase() === 'z' ? 'edit.undo' : 'edit.redo');
       }
+      // Ctrl+Tab / Ctrl+Shift+Tab：切换标签页（编辑框会把 Tab 当作缩进，因此在这里先行处理）
+      if (e.ctrlKey && !e.altKey && e.key === 'Tab' && !$('.modal-mask')) {
+        e.preventDefault();
+        e.stopPropagation();
+        stepTab(e.shiftKey ? -1 : 1);
+        return;
+      }
       // Ctrl+Shift+V：编辑框自行完成「粘贴为纯文本」，这里只需告知智能粘贴本次不要转换
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'v' && ws) ws.pastePlain();
       // Ctrl+Shift+Z 重做（菜单中重做为 Ctrl+Y，这里补充常见的另一种快捷键）
@@ -2135,7 +2517,7 @@
     api.on('settings-changed', (patch) => {
       const local = {};
       // 窗口自身的界面状态（侧边栏开关、专注模式等）不跨窗口同步
-      for (const k of Object.keys(patch)) if (!/^(sidebar|sidebarTab|sidebarWidth|focusMode|typewriter|lastFolder|lastFile|bounds|recentFiles)$/.test(k)) local[k] = patch[k];
+      for (const k of Object.keys(patch)) if (!/^(sidebar|sidebarTab|sidebarWidth|focusMode|typewriter|lastFolder|lastFile|bounds|recentFiles|sessionTabs|sessionActive|docPositions)$/.test(k)) local[k] = patch[k];
       Object.assign(state.settings, local);
       if (Object.keys(local).length) applySettings(local);
     });
@@ -2181,7 +2563,7 @@
     $('#sb-update').onclick = () => extras.updateBadgeClick();
     ws = ZWorkspace.init({
       api, state, toast, showModal, promptText, runCommand, openPath, loadText, loadFolder, getText, isDirty, docName, setSetting,
-      getSelection, renderMarkdown, onLink, revealAt, relocate, detach, source,
+      getSelection, renderMarkdown, onLink, revealAt, relocatePath, detachPath, openDoc, tabsOn, recoveryDocs, tabMenu, source,
       editor: () => editor,
       focusEditor: () => { if (state.sourceMode) source.focus(); else editor.focusEditor(); },
       openLightbox: (src, alt) => extras.openLightbox(src, alt),
@@ -2193,9 +2575,7 @@
     const startup = initial.startup ? state.settings.startupAction : 'new'; // 「新建窗口」总是打开空白文档
     if (initial.file) await openPath(initial.file, { force: true, skipConfirm: true });
     else if (initial.firstRun || startup === 'welcome') await openHelp('欢迎使用 Moyu.md', '欢迎使用 Moyu');
-    else if (startup === 'restoreLast' && state.settings.lastFile && (await api.invoke('fs:exists', state.settings.lastFile))) {
-      await openPath(state.settings.lastFile, { force: true, skipConfirm: true });
-    } else loadText('', {});
+    else if (startup === 'restoreLast' && (await restoreSession())) { /* 已恢复上次打开的标签页 */ } else loadText('', {});
     if (state.settings.lastFolder) loadFolder(state.settings.lastFolder); else renderTree(null);
 
     // 启动后自动检查更新：结果显示在状态栏，发现新版本时弹窗询问（只在程序启动时的首个窗口检查）
@@ -2203,7 +2583,7 @@
     // 上次没有正常退出时，提示恢复未保存的内容（只在程序启动时的首个窗口检查）
     if (!state.selfTest && initial.startup) ws.showRecovery(false);
     // 供自检脚本使用
-    window.__zmark = { ws, docName, openPreferences, exportDoc, extras, refreshFonts, editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
+    window.__zmark = { tabs: { list: () => tabs.map((t) => ({ id: t.id, name: tabName(t), path: tabPath(t), dirty: tabDirty(t), active: t === activeTab })), get: tabById, switchTo: (i) => switchTab(tabs[i]), close: (i) => closeTab(i === undefined ? activeTab : tabs[i]), closeAll: () => closeTabs(tabs.slice()), step: stepTab, move: (from, before) => moveTab(tabs[from], before === null ? null : tabs[before]), reopen: reopenClosedTab, menu: (i) => tabMenu(tabs[i].id), confirmAll: confirmAllTabs, restoreSession }, newDoc, ws, docName, openPreferences, exportDoc, extras, refreshFonts, editor, source, state, runCommand, openPath, loadText, getText, isDirty, save, buildExportHtml, find, countWords, loadFolder, toggleSource, insertImages, uploadAllLocal, setSetting, openPreferences, resetSettings, plugins: pluginHost, bus };
     document.body.dataset.ready = '1';
     hideSplash();
   }

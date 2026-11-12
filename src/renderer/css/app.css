@@ -590,3 +590,46 @@ body.has-bg.bg-panels #sidebar, body.has-bg.bg-panels #statusbar {
 .pandoc-status.ok { color: #2da44e; }
 .modal.pandoc-modal { width: min(560px, 92vw); }
 .modal.pandoc-modal p { line-height: 1.75; }
+
+/* ---------- 标签页 ---------- */
+#content-wrap { flex-direction: column; }
+#content-wrap > .scroller { min-height: 0; }
+#tabbar {
+  display: flex; align-items: stretch; flex-shrink: 0; height: 34px;
+  background: var(--sidebar-bg); border-bottom: 1px solid var(--border);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; user-select: none;
+}
+#tabbar[hidden] { display: none; }
+#tabbar::-webkit-scrollbar { display: none; }
+#content-wrap.has-tabs #findbar { top: 44px; }
+.tab {
+  display: flex; align-items: center; gap: 4px; flex: 0 1 190px; min-width: 96px; max-width: 220px;
+  padding: 0 6px 0 12px; font-size: 12.5px; color: var(--text-soft); cursor: pointer;
+  border-right: 1px solid var(--border); white-space: nowrap; position: relative;
+}
+.tab:hover { background: var(--sidebar-active); color: var(--text); }
+.tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
+.tab-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tab-dir { color: var(--muted); font-size: 11.5px; margin-left: 6px; }
+.tab-close {
+  width: 20px; height: 20px; flex-shrink: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 15px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.tab-close::before { content: '×'; }
+.tab-close:hover { background: var(--border); color: var(--text); }
+.tab:not(.active):not(:hover):not(.dirty) .tab-close { visibility: hidden; }
+/* 有未保存的修改：关闭按钮显示为圆点，悬停时变回关闭 */
+.tab.dirty .tab-close::before { content: '●'; font-size: 9px; color: #d4881c; }
+.tab.dirty .tab-close:hover::before { content: '×'; font-size: 15px; color: inherit; }
+.tab.drop-before { box-shadow: inset 2px 0 0 var(--accent); }
+.tab.drop-after { box-shadow: inset -2px 0 0 var(--accent); }
+.tab.active.drop-before { box-shadow: inset 2px 0 0 var(--accent), inset 0 2px 0 var(--accent); }
+.tab.active.drop-after { box-shadow: inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent); }
+.tab-new {
+  flex-shrink: 0; width: 34px; border: 0; background: transparent; color: var(--text-soft); cursor: pointer; font-size: 14px;
+}
+.tab-new:hover { background: var(--sidebar-active); color: var(--text); }
+body.has-bg.bg-panels #tabbar { background: color-mix(in srgb, var(--sidebar-bg) 70%, transparent); }
+body.has-bg.bg-panels .tab.active { background: color-mix(in srgb, var(--bg) 78%, transparent); }
+body.focus-mode #tabbar { opacity: 0.45; transition: opacity 0.2s; }
+body.focus-mode #tabbar:hover { opacity: 1; }

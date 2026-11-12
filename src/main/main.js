@@ -110,6 +110,9 @@ const DEFAULTS = {
   // 更新与历史版本
   smartPaste: true, // 粘贴网页 / Word 内容时转换为 Markdown
   restoreScroll: true, // 重新打开文件时回到上次的阅读位置
+  tabs: true, // 在标签页中打开文档
+  sessionTabs: [], // 上次打开着的文件（用于启动时恢复）
+  sessionActive: null,
   docPositions: {},
   autoCheckUpdate: true,
   lastUpdateCheck: 0,
@@ -419,6 +422,8 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0];
   });
   h('dialog:confirmSave', async (e, name) => {
+    // 自检不弹出系统对话框：默认按「不保存」处理，测试可指定 0 保存 / 1 不保存 / 2 取消
+    if (SELF_TEST) return global.__moyuConfirmSave === undefined ? 1 : global.__moyuConfirmSave;
     const r = await dialog.showMessageBox(focusedWin(e), {
       type: 'warning',
       buttons: ['保存', '不保存', '取消'],

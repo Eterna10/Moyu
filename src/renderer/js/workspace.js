@@ -290,8 +290,8 @@
       if (!name || name === basename(p)) return null;
       try {
         const dst = await api.invoke('fs:rename', p, name);
-        // 正在编辑的文档（或其所在的文件夹）被改名：跟随到新路径
-        if (within(state.filePath, p)) ctx.relocate(dst + state.filePath.slice(p.length));
+        // 打开着的文档（或其所在的文件夹）被改名：所有标签页跟随到新路径
+        ctx.relocatePath(p, dst);
         for (const x of Array.from(state.expanded)) if (within(x, p)) { state.expanded.delete(x); state.expanded.add(dst + x.slice(p.length)); }
         await reloadTree();
         return dst;
@@ -310,7 +310,7 @@
       }
       try {
         await api.invoke('fs:trash', p);
-        if (within(state.filePath, p)) ctx.detach(); // 正在编辑的文档被删除：内容保留为未保存的新文档
+        ctx.detachPath(p); // 打开着的文档被删除：内容保留为未保存的新文档
         await reloadTree();
         return true;
       } catch (err) { ctx.toast('删除失败：' + errText(err), true); return false; }
@@ -506,6 +506,9 @@
       const editor = ed();
       const modal = target.closest('.modal-mask, .palette-mask, #findbar, #panel-search .search-box');
       if (modal) return p.isEditable || p.canCopy ? { items: inputMenu(p), run: (id) => runEdit(id) } : null;
+      const tabEl = target.closest('#tabbar .tab');
+      if (tabEl) return ctx.tabMenu(Number(tabEl.dataset.id));
+      if (target.closest('#tabbar')) return null;
       const tree = target.closest('#panel-files');
       if (tree) {
         const item = target.closest('.tree-item');
@@ -553,32 +556,42 @@
 
     /* ---------------- 崩溃恢复 ---------------- */
 
-    let recoveryKey = '';
-    let recoverySaved = false;
+    const recoverySaved = new Set(); // 已写入恢复区的标签页标识
     let recoveryTimer = 0;
-    const newKey = () => { recoveryKey = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); recoverySaved = false; };
-    newKey();
+    const recoveryKey = () => (ctx.recoveryDocs().find((d) => d.active) || {}).key;
 
-    /** 把未保存的内容写入恢复区；文档已保存（或为空）时清除 */
+    /** 把各标签页中未保存的内容写入恢复区；已保存（或为空）的清除 */
     async function syncRecovery() {
       clearTimeout(recoveryTimer);
-      const text = ctx.getText();
       try {
-        if (ctx.isDirty() && text.trim()) {
-          await api.invoke('recovery:save', recoveryKey, { filePath: state.filePath, name: ctx.docName(), text });
-          recoverySaved = true;
-        } else if (recoverySaved) {
-          recoverySaved = false;
-          await api.invoke('recovery:clear', recoveryKey);
+        const keep = new Set();
+        for (const d of ctx.recoveryDocs()) {
+          if (!d.dirty || !d.text.trim()) continue;
+          keep.add(d.key);
+          // 后台标签页的内容不会变化，写过一次即可
+          if (d.active || !recoverySaved.has(d.key)) await api.invoke('recovery:save', d.key, { filePath: d.filePath, name: d.name, text: d.text });
+          recoverySaved.add(d.key);
+        }
+        for (const k of Array.from(recoverySaved)) {
+          if (keep.has(k)) continue;
+          recoverySaved.delete(k);
+          await api.invoke('recovery:clear', k);
         }
       } catch (e) { console.warn('写入恢复数据失败', e); }
     }
     const touchRecovery = () => { clearTimeout(recoveryTimer); recoveryTimer = setTimeout(syncRecovery, 1500); };
+    /** 关闭窗口时：清除本窗口的全部恢复数据 */
     async function clearRecovery() {
       clearTimeout(recoveryTimer);
-      if (!recoverySaved) return;
-      recoverySaved = false;
-      try { await api.invoke('recovery:clear', recoveryKey); } catch (e) { /* 忽略 */ }
+      for (const k of Array.from(recoverySaved)) {
+        recoverySaved.delete(k);
+        try { await api.invoke('recovery:clear', k); } catch (e) { /* 忽略 */ }
+      }
+    }
+    /** 标签页被关闭：它的恢复数据不再需要 */
+    function dropRecovery(key) {
+      if (!recoverySaved.delete(key)) return;
+      api.invoke('recovery:clear', key).catch(() => {});
     }
 
     const fmtTime = (t) => { const d = new Date(t); const z = (n) => String(n).padStart(2, '0'); return `${d.getMonth() + 1} 月 ${d.getDate()} 日 ${z(d.getHours())}:${z(d.getMinutes())}`; };
@@ -586,7 +599,7 @@
     /** 列出上次没有正常保存的文档，供用户恢复或丢弃；没有可恢复的内容时返回 false */
     async function showRecovery(manual) {
       let list = [];
-      try { list = (await api.invoke('recovery:list')).filter((x) => x.key !== recoveryKey); } catch (e) { list = []; }
+      try { list = await api.invoke('recovery:list'); } catch (e) { list = []; }
       if (!list.length) { if (manual) ctx.toast('没有需要恢复的文档'); return false; }
       ctx.showModal(`<h3>恢复未保存的内容</h3>
         <p class="recover-tip">Moyu 上次没有正常退出，以下文档中有尚未保存的修改：</p>
@@ -611,15 +624,17 @@
             if (!$('.recover-item', el)) close();
             return;
           }
-          if (ctx.isDirty()) { ctx.toast('当前文档有未保存的修改，请先保存后再恢复', true); return; }
+          if (!ctx.tabsOn() && ctx.isDirty()) { ctx.toast('当前文档有未保存的修改，请先保存后再恢复', true); return; }
           try {
             const d = await api.invoke('recovery:read', key);
             const exists = d.filePath && (await api.invoke('fs:exists', d.filePath));
             const mtime = exists ? await api.invoke('fs:stat', d.filePath) : null;
             // 原文件还在：恢复为该文件的未保存修改；否则作为新文档
-            ctx.loadText(d.text, exists ? { filePath: d.filePath, mtime, markDirty: true } : { name: d.name, markDirty: true });
+            ctx.openDoc(d.text, exists ? { filePath: d.filePath, mtime, markDirty: true } : { name: d.name, markDirty: true });
             await api.invoke('recovery:clear', key);
-            close();
+            item.remove();
+            // 启用标签页时可以连续恢复多份文档，各占一个标签页
+            if (!ctx.tabsOn() || !$('.recover-item', el)) close();
             ctx.toast('已恢复，请记得保存');
             touchRecovery();
           } catch (err) { ctx.toast('恢复失败：' + errText(err), true); }
@@ -633,7 +648,7 @@
       newFileIn, newFolderIn, renamePath, deletePath, treeMenu, runTree,
       openSearch, runSearch, openHit, searchState: () => search.last,
       buildMenu,
-      touchRecovery, syncRecovery, clearRecovery, showRecovery, recoveryKey: () => recoveryKey, resetRecoveryKey: newKey,
+      touchRecovery, syncRecovery, clearRecovery, dropRecovery, showRecovery, recoveryKey,
     };
   }
 
