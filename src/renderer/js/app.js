@@ -11,7 +11,7 @@
   const dirname = (p) => (p ? p.replace(/[\\/][^\\/]*$/, '') : null);
   const MD_RE = /\.(md|markdown|mdown|mkd|txt)$/i;
   const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
-  const DARK = new Set(['night', 'midnight']);
+  const DARK = new Set(['night', 'midnight', 'moyu-night']);
 
   const state = {
     filePath: null,
@@ -1382,6 +1382,8 @@
     if (has('theme')) {
       document.body.dataset.theme = s.theme;
       const dark = DARK.has(s.theme);
+      const mm = $('#moyu-mode');
+      if (mm) { mm.title = dark ? '切换到日间' : '切换到夜间'; mm.setAttribute('aria-pressed', String(s.theme === 'moyu-night')); }
       $('#hljs-light').disabled = dark;
       $('#hljs-dark').disabled = !dark;
       ZMD.setMermaidTheme(dark);
@@ -1415,7 +1417,7 @@
     const row = (label, desc, control, cond) =>
       `<div class="row"${cond ? ` data-if="${cond}"` : ''}><label>${label}${desc ? `<small>${desc}</small>` : ''}</label>${control}</div>`;
     const chk = (k, label, tip) => `<label class="pref-check"><input type="checkbox" data-k="${k}"${s[k] ? ' checked' : ''}><span>${label}</span>${tip ? `<span class="pref-tip" title="${esc(tip)}">?</span>` : ''}</label>`;
-    const themes = [['github', 'GitHub'], ['newsprint', 'Newsprint 报刊'], ['night', 'Night 夜间'], ['midnight', 'Midnight 午夜蓝']];
+    const themes = [['github', 'GitHub'], ['newsprint', 'Newsprint 报刊'], ['night', 'Night 夜间'], ['midnight', 'Midnight 午夜蓝'], ['moyu', '墨羽蓝调 · 日间'], ['moyu-night', '墨羽蓝调 · 夜间']];
     const actions = [
       ['none', '无特殊操作'],
       ['copyToCurrent', '复制图片到当前文件夹 (./)'],
@@ -2002,6 +2004,10 @@
       const theme = s.exportTheme && s.exportTheme !== 'current' ? s.exportTheme : s.theme;
       const dark = DARK.has(theme);
       const read = (p) => api.invoke('app:readAsset', p);
+      // 「墨羽蓝调」的标题、引用、表格等装饰写在单独的样式表里；其中的字体与图片地址改为本机的绝对地址
+      const moyuCss = /^moyu/.test(theme)
+        ? (await read('src/renderer/css/theme-moyu.css')).replace(/url\("\.\.\/assets\//g, 'url("' + ZMD.toFileUrl(state.info.katexDir).replace(/node_modules\/katex\/dist\/?$/, 'src/renderer/assets/'))
+        : '';
       const [themes, mdcss, hl, kx] = await Promise.all([
         read('src/renderer/css/themes.css'),
         read('src/renderer/css/markdown.css'),
@@ -2029,7 +2035,7 @@
         @media print{.markdown-body{padding:0;max-width:none}pre,table,img,.mermaid-block,.math-block,blockquote{break-inside:avoid}h1,h2,h3{break-after:avoid}}`;
       const title = esc(docName().replace(/\.(md|markdown|txt)$/i, ''));
       return `<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<meta name="generator" content="Moyu">\n<title>${title}</title>\n` +
-        `<style>\n${katexCss}\n${hl}\n${themes}\n${mdcss}\n${[...docStyles].join('\n')}\n${page}\n</style>\n</head>\n<body data-theme="${esc(theme)}"${bodyClasses ? ` class="${bodyClasses}"` : ''}>\n<article class="markdown-body">\n${holder.innerHTML}\n</article>\n</body>\n</html>\n`;
+        `<style>\n${katexCss}\n${hl}\n${themes}\n${mdcss}\n${moyuCss}\n${[...docStyles].join('\n')}\n${page}\n</style>\n</head>\n<body data-theme="${esc(theme)}"${bodyClasses ? ` class="${bodyClasses}"` : ''}>\n<article class="markdown-body">\n${holder.innerHTML}\n</article>\n</body>\n</html>\n`;
     } finally {
       holder.remove();
     }
@@ -2386,7 +2392,9 @@
       return list;
     },
   };
-  ['github', 'newsprint', 'night', 'midnight'].forEach((t) => { COMMANDS['theme.' + t] = () => setSetting({ theme: t }); });
+  ['github', 'newsprint', 'night', 'midnight', 'moyu', 'moyu-night'].forEach((t) => { COMMANDS['theme.' + t] = () => setSetting({ theme: t }); });
+  // 「墨羽蓝调」的日间 / 夜间切换（右下角的按钮）；当前不是这套主题时切换到它的日间版
+  COMMANDS['theme.moyuToggle'] = () => setSetting({ theme: state.settings.theme === 'moyu' ? 'moyu-night' : 'moyu' });
 
   function closeModals() { $$('.modal-mask').forEach((m) => m.remove()); }
 
@@ -2484,6 +2492,7 @@
 
     bindSidebar();
     bindTabs();
+    $('#moyu-mode').onclick = () => runCommand('theme.moyuToggle');
     bindFind();
     bindDrop();
     $('#sb-sidebar').onclick = () => runCommand('view.sidebar');

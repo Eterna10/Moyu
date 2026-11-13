@@ -173,7 +173,7 @@ function saveSettings() {
 const windows = new Set();
 let startupHandled = false;
 let splashShown = false; // 开启动画只在程序启动时的第一个窗口播放
-function bgFor(theme) { return { night: '#1f2124', midnight: '#12192b', newsprint: '#f3f2ee' }[theme] || '#ffffff'; }
+function bgFor(theme) { return { night: '#1f2124', midnight: '#12192b', newsprint: '#f3f2ee', moyu: '#eaeeff', 'moyu-night': '#121732' }[theme] || '#ffffff'; }
 
 function createWindow(filePath) {
   const b = settings.bounds || {};
@@ -206,7 +206,7 @@ function createWindow(filePath) {
   // 是否播放开启动画由主进程在加载前决定（通过地址参数传给页面），关闭时不会闪现
   const splash = !splashShown && settings.showSplash !== false;
   splashShown = true;
-  const dark = ['night', 'midnight'].includes(settings.theme);
+  const dark = ['night', 'midnight', 'moyu-night'].includes(settings.theme);
   win.loadFile(path.join(ROOT, 'src', 'renderer', 'index.html'), splash ? { query: { splash: '1', bg: bgFor(settings.theme), dark: dark ? '1' : '0' } } : undefined);
   win.once('ready-to-show', () => { if (SELF_TEST) win.showInactive(); else win.show(); });
 

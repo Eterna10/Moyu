@@ -1,0 +1,239 @@
+/* Moyu 内置主题「墨羽蓝调」（日间 moyu / 夜间 moyu-night）
+ *
+ * 水彩星空作背景，正文是一张悬浮其上的半透明书页；侧边栏、标签页、状态栏为毛玻璃。
+ * 字体使用随软件附带的霞鹜文楷 Lite（SIL OFL 1.1，许可证见 assets/themes/moyu/LXGWWenKaiLite-OFL.txt）。
+ * 颜色变量定义在 themes.css；这里是这套主题特有的版式、装饰与日夜切换按钮。
+ */
+@font-face {
+  font-family: "LXGW WenKai Lite";
+  src: url("../assets/themes/moyu/LXGWWenKaiLite-Regular.woff2") format("woff2");
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+/* ---------- 日夜切换按钮：只在本主题下显示，位于状态栏上方的右下角 ---------- */
+#moyu-mode { display: none; }
+body[data-theme^="moyu"] #moyu-mode {
+  position: fixed; right: 22px; bottom: 42px; z-index: 30;
+  display: flex; align-items: center; width: 62px; height: 30px; padding: 0; border-radius: 16px; cursor: pointer;
+  border: 1px solid var(--moyu-edge);
+  background: var(--moyu-glass);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 6px 18px var(--moyu-shadow), inset 0 1px 0 var(--moyu-shine);
+  transition: background-color 0.5s, border-color 0.5s, box-shadow 0.3s, transform 0.15s, opacity 0.3s;
+}
+body.no-statusbar[data-theme^="moyu"] #moyu-mode { bottom: 16px; }
+body.sidebar-right[data-theme^="moyu"]:not(.no-sidebar) #moyu-mode { right: auto; left: 22px; }
+#moyu-mode:hover { transform: translateY(-1px); box-shadow: 0 9px 22px var(--moyu-shadow), inset 0 1px 0 var(--moyu-shine); }
+#moyu-mode:active { transform: translateY(0) scale(0.97); }
+#moyu-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#moyu-mode svg { position: absolute; top: 7px; width: 14px; height: 14px; transition: opacity 0.4s, color 0.4s; }
+#moyu-mode .mm-sun { left: 9px; color: #f0a43a; }
+#moyu-mode .mm-moon { right: 9px; color: var(--muted); opacity: 0.55; }
+/* 滑块：盖住当前模式的图标，图标在滑块上以白色显示 */
+#moyu-mode .mm-knob {
+  position: absolute; top: 2px; left: 2px; width: 26px; height: 24px; border-radius: 13px;
+  background: linear-gradient(135deg, #ffcf6b, #ff9d5c);
+  box-shadow: 0 2px 6px rgba(240, 150, 60, 0.45);
+  transition: transform 0.45s cubic-bezier(0.5, 1.5, 0.5, 1), background 0.45s, box-shadow 0.45s;
+}
+#moyu-mode .mm-sun, #moyu-mode .mm-moon { z-index: 1; }
+body[data-theme="moyu"] #moyu-mode .mm-sun { color: #fff; }
+body[data-theme="moyu-night"] #moyu-mode .mm-knob {
+  transform: translateX(32px);
+  background: linear-gradient(135deg, #7f8dff, #a886f5);
+  box-shadow: 0 2px 8px rgba(126, 140, 255, 0.5);
+}
+body[data-theme="moyu-night"] #moyu-mode .mm-moon { color: #fff; opacity: 1; }
+body[data-theme="moyu-night"] #moyu-mode .mm-sun { color: var(--muted); opacity: 0.6; }
+body.focus-mode[data-theme^="moyu"] #moyu-mode { opacity: 0.35; }
+body.focus-mode[data-theme^="moyu"] #moyu-mode:hover { opacity: 1; }
+
+/* ---------- 背景：水彩星空，日夜两张图交叉淡入淡出（用户自己设置了背景图片时让位） ---------- */
+body[data-theme^="moyu"]:not(.has-bg) { background: var(--moyu-sky); }
+body[data-theme^="moyu"]:not(.has-bg) #bg-layer { display: block; }
+body[data-theme^="moyu"]:not(.has-bg) #bg-image {
+  background: url("../assets/themes/moyu/bg-day.webp") center / cover no-repeat;
+  filter: none !important;
+}
+body[data-theme^="moyu"]:not(.has-bg) #bg-image::after {
+  content: ""; position: absolute; inset: 0; opacity: 0; transition: opacity 0.8s ease;
+  background: url("../assets/themes/moyu/bg-night.webp") center / cover no-repeat;
+}
+body[data-theme="moyu-night"]:not(.has-bg) #bg-image::after { opacity: 1; }
+body[data-theme^="moyu"]:not(.has-bg) #bg-overlay { opacity: 0 !important; }
+body[data-theme^="moyu"] #app { position: relative; z-index: 1; }
+
+/* 切换日夜时界面颜色平滑过渡 */
+body[data-theme^="moyu"] #sidebar, body[data-theme^="moyu"] #statusbar, body[data-theme^="moyu"] #content,
+body[data-theme^="moyu"] #source, body[data-theme^="moyu"] .tab, body[data-theme^="moyu"] .markdown-body {
+  transition: background-color 0.5s ease, border-color 0.5s ease, color 0.4s ease, box-shadow 0.5s ease;
+}
+
+/* ---------- 书页：正文区域是一张悬浮的毛玻璃纸，文字在其中滚动（纸本身不动，滚动流畅） ---------- */
+body[data-theme^="moyu"] #content,
+body[data-theme^="moyu"] #source {
+  flex: 1 1 auto; align-self: center; box-sizing: border-box;
+  width: min(calc(100% - 36px), calc(var(--content-width, 860px) + 150px));
+  margin: 16px 0 14px;
+  border: 1px solid var(--moyu-edge); border-radius: 20px;
+  background: var(--moyu-sheet);
+  backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: 0 20px 60px var(--moyu-shadow), 0 2px 8px var(--moyu-shadow-soft), inset 0 1px 0 var(--moyu-shine);
+}
+body[data-theme^="moyu"] #content-wrap.has-tabs #content,
+body[data-theme^="moyu"] #content-wrap.has-tabs #source { margin-top: 8px; }
+body[data-theme^="moyu"] #write { padding-top: 44px; }
+body[data-theme^="moyu"] #findbar { top: 30px; right: 36px; border-radius: 14px; border-color: var(--moyu-edge); backdrop-filter: blur(18px); background: var(--moyu-pop); }
+body[data-theme^="moyu"] #content-wrap.has-tabs #findbar { top: 66px; }
+
+/* 细而圆的滚动条 */
+body[data-theme^="moyu"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+body[data-theme^="moyu"] ::-webkit-scrollbar-track { background: transparent; }
+body[data-theme^="moyu"] ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 26%, transparent); border-radius: 8px;
+  border: 3px solid transparent; background-clip: padding-box;
+}
+body[data-theme^="moyu"] ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--accent) 48%, transparent); background-clip: padding-box; border: 3px solid transparent; }
+body[data-theme^="moyu"] #content::-webkit-scrollbar-track, body[data-theme^="moyu"] #source::-webkit-scrollbar-track { margin: 14px 0; }
+body[data-theme^="moyu"] ::selection { background: var(--sel); }
+
+/* ---------- 标签页：与书页同宽的一排胶囊 ---------- */
+body[data-theme^="moyu"] #tabbar {
+  align-self: center; box-sizing: border-box; height: 38px; margin-top: 12px; padding: 0 4px; gap: 6px;
+  width: min(calc(100% - 36px), calc(var(--content-width, 860px) + 150px));
+  background: transparent; border-bottom: 0; backdrop-filter: none;
+}
+body[data-theme^="moyu"] .tab {
+  border: 1px solid transparent; border-radius: 12px; height: 34px; align-self: flex-end;
+  background: var(--moyu-glass-soft); backdrop-filter: blur(12px);
+}
+body[data-theme^="moyu"] .tab:hover { background: var(--moyu-glass); }
+body[data-theme^="moyu"] .tab.active {
+  background: var(--moyu-sheet); border-color: var(--moyu-edge); color: var(--heading); font-weight: 600;
+  box-shadow: 0 6px 16px var(--moyu-shadow-soft), inset 0 1px 0 var(--moyu-shine);
+}
+body[data-theme^="moyu"] .tab.active.drop-before { box-shadow: inset 2px 0 0 var(--accent); }
+body[data-theme^="moyu"] .tab.active.drop-after { box-shadow: inset -2px 0 0 var(--accent); }
+body[data-theme^="moyu"] .tab-new { border-radius: 12px; height: 34px; align-self: flex-end; background: var(--moyu-glass-soft); backdrop-filter: blur(12px); }
+body[data-theme^="moyu"] .tab-new:hover { background: var(--moyu-glass); }
+body.has-bg.bg-panels[data-theme^="moyu"] #tabbar { background: transparent; }
+
+/* ---------- 侧边栏与状态栏：毛玻璃 ---------- */
+body[data-theme^="moyu"] #sidebar {
+  background: var(--sidebar-bg); border-right: 1px solid var(--moyu-edge);
+  backdrop-filter: blur(22px) saturate(1.15);
+}
+body.sidebar-right[data-theme^="moyu"] #sidebar { border-right: 0; border-left: 1px solid var(--moyu-edge); }
+body[data-theme^="moyu"] .side-tabs { padding: 14px 12px 8px; gap: 6px; }
+body[data-theme^="moyu"] .side-tab,
+body[data-theme^="moyu"] .tree-item,
+body[data-theme^="moyu"] .outline-item,
+body[data-theme^="moyu"] .search-file,
+body[data-theme^="moyu"] .search-hit { border-radius: 10px; transition: background-color 0.18s, color 0.18s; }
+body[data-theme^="moyu"] .side-tab { font-size: 13.5px; }
+body[data-theme^="moyu"] .side-tab.active {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--moyu-violet) 14%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+body[data-theme^="moyu"] .tree-item.current,
+body[data-theme^="moyu"] .outline-item.active {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 17%, transparent), color-mix(in srgb, var(--accent) 4%, transparent));
+}
+body[data-theme^="moyu"] #resizer:hover, body[data-theme^="moyu"] #resizer.dragging { background: linear-gradient(180deg, var(--accent), var(--moyu-violet)); opacity: 0.55; }
+body[data-theme^="moyu"] .search-box input { border-radius: 9px; background: var(--moyu-glass); }
+body[data-theme^="moyu"] #statusbar {
+  background: var(--status-bg); border-top: 1px solid var(--moyu-edge); backdrop-filter: blur(18px) saturate(1.1);
+}
+body[data-theme^="moyu"] .status-btn { border-radius: 8px; }
+body[data-theme^="moyu"] .status-btn.on { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, transparent), color-mix(in srgb, var(--moyu-violet) 16%, transparent)); }
+
+/* ---------- 对话框、命令面板、提示 ---------- */
+body[data-theme^="moyu"] .modal,
+body[data-theme^="moyu"] .palette,
+body[data-theme^="moyu"] .slash-menu {
+  border-radius: 18px; border-color: var(--moyu-edge); background: var(--moyu-pop);
+  backdrop-filter: blur(26px) saturate(1.2); box-shadow: var(--shadow), inset 0 1px 0 var(--moyu-shine);
+}
+body[data-theme^="moyu"] .slash-menu { border-radius: 14px; }
+body[data-theme^="moyu"] .modal-mask, body[data-theme^="moyu"] .palette-mask { background: var(--moyu-mask); backdrop-filter: blur(3px); }
+body[data-theme^="moyu"] .text-btn { border-radius: 9px; transition: background-color 0.16s, border-color 0.16s, color 0.16s, box-shadow 0.16s; }
+body[data-theme^="moyu"] .text-btn.primary {
+  border: 0; background: linear-gradient(135deg, var(--accent), var(--moyu-violet));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 34%, transparent);
+}
+body[data-theme^="moyu"] .toast { border-radius: 14px; background: var(--moyu-toast); color: #fff; backdrop-filter: blur(12px); }
+body[data-theme^="moyu"] .toast.error { background: #d9485f; }
+body[data-theme^="moyu"] input[type="text"], body[data-theme^="moyu"] select, body[data-theme^="moyu"] textarea { border-radius: 8px; }
+body[data-theme^="moyu"] input[type="checkbox"] { accent-color: var(--accent); }
+
+/* ---------- 编辑中的段落 ---------- */
+body[data-theme^="moyu"] .md-editing { border-radius: 12px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 7%, transparent); }
+body[data-theme^="moyu"] .hl-input, body[data-theme^="moyu"] .md-rich { caret-color: var(--accent); }
+
+/* ---------- 文档排版 ---------- */
+body[data-theme^="moyu"] .markdown-body { letter-spacing: 0.012em; }
+body[data-theme^="moyu"] .markdown-body h1,
+body[data-theme^="moyu"] .markdown-body h2,
+body[data-theme^="moyu"] .markdown-body h3 { letter-spacing: 0.03em; font-weight: 700; }
+body[data-theme^="moyu"] .markdown-body h1 {
+  border: 0; padding-bottom: 0.5em; position: relative; color: var(--heading);
+}
+body[data-theme^="moyu"] .markdown-body h1::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--moyu-violet) 28%, color-mix(in srgb, var(--moyu-violet) 0%, transparent) 78%);
+}
+body[data-theme^="moyu"] .markdown-body h2 { border-bottom: 0; padding-bottom: 0.2em; padding-left: 0.62em; position: relative; }
+body[data-theme^="moyu"] .markdown-body h2::before {
+  content: ""; position: absolute; left: 0; top: 0.22em; bottom: 0.34em; width: 4px; border-radius: 3px;
+  background: linear-gradient(180deg, var(--accent), var(--moyu-violet));
+}
+body[data-theme^="moyu"] .markdown-body h3 { color: var(--heading); }
+body[data-theme^="moyu"] .markdown-body h4, body[data-theme^="moyu"] .markdown-body h5, body[data-theme^="moyu"] .markdown-body h6 { color: color-mix(in srgb, var(--heading) 78%, var(--text)); }
+body[data-theme^="moyu"] .markdown-body a {
+  color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--accent) 34%, transparent); transition: text-decoration-color 0.18s, color 0.18s;
+}
+body[data-theme^="moyu"] .markdown-body a:hover { text-decoration-color: var(--accent); }
+body[data-theme^="moyu"] .markdown-body strong { color: var(--heading); }
+body[data-theme^="moyu"] .markdown-body mark { border-radius: 4px; padding: 0.08em 0.28em; background: linear-gradient(180deg, transparent 12%, var(--mark-bg) 12%); }
+body[data-theme^="moyu"] .markdown-body blockquote {
+  border-left: 3px solid var(--quote-border); border-radius: 0 14px 14px 0; padding: 0.6em 1.15em;
+  background: linear-gradient(100deg, var(--moyu-quote-a), var(--moyu-quote-b));
+}
+body[data-theme^="moyu"] .markdown-body .md-toc { border-radius: 0 14px 14px 0; background: linear-gradient(100deg, var(--moyu-quote-a), var(--moyu-quote-b)); }
+body[data-theme^="moyu"] .markdown-body code:not(pre code) { border: 1px solid color-mix(in srgb, var(--accent) 13%, transparent); border-radius: 6px; padding: 0.12em 0.42em; }
+body[data-theme^="moyu"] .markdown-body .code-block {
+  border-radius: 14px; border: 1px solid var(--border); overflow: hidden;
+  box-shadow: 0 6px 18px var(--moyu-shadow-soft), inset 0 1px 0 var(--moyu-shine);
+}
+body[data-theme^="moyu"] .markdown-body .code-toolbar { background: color-mix(in srgb, var(--bg-soft) 70%, transparent); }
+body[data-theme^="moyu"] .markdown-body pre { border-radius: 14px; }
+body[data-theme^="moyu"] .markdown-body .code-toolbar + pre { border-radius: 0 0 14px 14px; }
+body[data-theme^="moyu"] .markdown-body table { border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+body[data-theme^="moyu"] .markdown-body th, body[data-theme^="moyu"] .markdown-body td { border: 0; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+body[data-theme^="moyu"] .markdown-body tr > :last-child { border-right: 0; }
+body[data-theme^="moyu"] .markdown-body tr:last-child > td { border-bottom: 0; }
+body[data-theme^="moyu"] .markdown-body th { color: var(--heading); background: linear-gradient(180deg, var(--table-head), color-mix(in srgb, var(--table-head) 70%, transparent)); }
+body[data-theme^="moyu"] .markdown-body tr:nth-child(2n) td { background: color-mix(in srgb, var(--accent) 3.5%, transparent); }
+body[data-theme^="moyu"] .markdown-body img { border-radius: 12px; box-shadow: 0 8px 24px var(--moyu-shadow-soft); }
+body[data-theme^="moyu"] .markdown-body .mermaid-block img, body[data-theme^="moyu"] .markdown-body .katex img { box-shadow: none; border-radius: 0; }
+body[data-theme^="moyu"] .markdown-body hr {
+  height: 2px; border: 0; border-radius: 2px; margin: 2em 12%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 55%, transparent) 30%, color-mix(in srgb, var(--moyu-violet) 55%, transparent) 70%, transparent);
+}
+body[data-theme^="moyu"] .markdown-body kbd { border-radius: 6px; border-color: var(--border); background: var(--bg-soft); box-shadow: 0 1px 0 var(--border); }
+body[data-theme^="moyu"] .markdown-body .task-checkbox { accent-color: var(--accent); }
+body[data-theme^="moyu"] .markdown-body li::marker { color: color-mix(in srgb, var(--accent) 75%, var(--text)); }
+body[data-theme^="moyu"] .markdown-body .front-matter { border-radius: 12px; }
+body[data-theme^="moyu"] .markdown-body .footnotes-sep { opacity: 0.6; }
+
+/* ---------- 尊重「减少动态效果」；窄窗口 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  body[data-theme^="moyu"] *, body[data-theme^="moyu"] *::before, body[data-theme^="moyu"] *::after { transition-duration: 0.01ms !important; }
+}
+@media (max-width: 760px) {
+  body[data-theme^="moyu"] #content, body[data-theme^="moyu"] #source { width: calc(100% - 20px); margin: 10px 0; border-radius: 16px; }
+  body[data-theme^="moyu"] #tabbar { width: calc(100% - 20px); }
+  body[data-theme^="moyu"] #moyu-mode { right: 14px; }
+}

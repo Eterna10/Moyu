@@ -139,3 +139,107 @@ body[data-theme="midnight"] {
   --font-heading: Georgia, "Segoe UI", "Microsoft YaHei UI", serif;
   color-scheme: dark;
 }
+
+/* 墨羽蓝调（内置主题，日间 / 夜间）。版式与装饰见 theme-moyu.css */
+body[data-theme="moyu"] {
+  --bg: #f6f8ff;
+  --bg-soft: #edf0ff;
+  --text: #2b3250;
+  --text-soft: #5f6a8c;
+  --muted: #8e97b4;
+  --border: rgba(108, 124, 196, 0.22);
+  --accent: #5468dc;
+  --accent-soft: rgba(84, 104, 220, 0.13);
+  --heading: #3d4eb0;
+  --code-bg: rgba(236, 240, 255, 0.86);
+  --inline-code-bg: rgba(110, 120, 225, 0.12);
+  --inline-code: #5b50c0;
+  --quote: #56628c;
+  --quote-border: #8794ea;
+  --table-head: #e8ecff;
+  --mark-bg: #dedcff;
+  --sidebar-bg: rgba(241, 244, 255, 0.66);
+  --sidebar-text: #47527a;
+  --sidebar-active: rgba(92, 108, 222, 0.13);
+  --status-bg: rgba(241, 244, 255, 0.72);
+  --edit-bg: rgba(92, 108, 222, 0.06);
+  --edit-border: rgba(92, 108, 222, 0.42);
+  --hl-mark: #a2aacb;
+  --hl-heading: #4f63d6;
+  --hl-code: #a05d7c;
+  --hl-link: #4b63cf;
+  --hl-math: #8261c9;
+  --sel: rgba(96, 112, 226, 0.24);
+  --find: rgba(255, 205, 60, 0.55);
+  --shadow: 0 22px 60px rgba(61, 75, 145, 0.22);
+  --font-body: "LXGW WenKai Lite", "霞鹜文楷 Lite", "LXGW WenKai", -apple-system, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-heading: var(--font-body);
+  --font-mono: "Cascadia Code", Consolas, "JetBrains Mono", "Sarasa Mono SC", "Microsoft YaHei Mono", monospace;
+  /* 本主题专用 */
+  --moyu-sky: #dfe6ff;
+  --moyu-violet: #9a82ea;
+  --moyu-sheet: rgba(255, 255, 255, 0.80);
+  --moyu-pop: rgba(250, 251, 255, 0.92);
+  --moyu-glass: rgba(255, 255, 255, 0.66);
+  --moyu-glass-soft: rgba(255, 255, 255, 0.36);
+  --moyu-edge: rgba(255, 255, 255, 0.78);
+  --moyu-shine: rgba(255, 255, 255, 0.85);
+  --moyu-shadow: rgba(61, 75, 145, 0.17);
+  --moyu-shadow-soft: rgba(61, 75, 145, 0.08);
+  --moyu-mask: rgba(62, 74, 138, 0.22);
+  --moyu-toast: rgba(57, 68, 132, 0.92);
+  --moyu-quote-a: rgba(228, 233, 255, 0.85);
+  --moyu-quote-b: rgba(241, 237, 255, 0.5);
+  color-scheme: light;
+}
+
+body[data-theme="moyu-night"] {
+  --bg: #161b31;
+  --bg-soft: #1f2644;
+  --text: #dfe4fa;
+  --text-soft: #a9b4d6;
+  --muted: #7f8bad;
+  --border: rgba(156, 171, 235, 0.19);
+  --accent: #97a6ff;
+  --accent-soft: rgba(151, 166, 255, 0.16);
+  --heading: #c4ccff;
+  --code-bg: rgba(14, 18, 38, 0.62);
+  --inline-code-bg: rgba(145, 155, 244, 0.16);
+  --inline-code: #d2c7ff;
+  --quote: #b6c0e1;
+  --quote-border: #8897f2;
+  --table-head: rgba(74, 84, 137, 0.5);
+  --mark-bg: rgba(133, 115, 226, 0.42);
+  --sidebar-bg: rgba(17, 22, 42, 0.68);
+  --sidebar-text: #c1c9e4;
+  --sidebar-active: rgba(143, 155, 241, 0.16);
+  --status-bg: rgba(15, 20, 40, 0.74);
+  --edit-bg: rgba(141, 154, 241, 0.08);
+  --edit-border: rgba(158, 169, 255, 0.5);
+  --hl-mark: #6f7ba0;
+  --hl-heading: #b9c4ff;
+  --hl-code: #f0b6d2;
+  --hl-link: #aebdff;
+  --hl-math: #d0b5ff;
+  --sel: rgba(140, 154, 255, 0.34);
+  --find: rgba(255, 196, 0, 0.45);
+  --shadow: 0 26px 70px rgba(2, 5, 20, 0.55);
+  --font-body: "LXGW WenKai Lite", "霞鹜文楷 Lite", "LXGW WenKai", -apple-system, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-heading: var(--font-body);
+  --font-mono: "Cascadia Code", Consolas, "JetBrains Mono", "Sarasa Mono SC", "Microsoft YaHei Mono", monospace;
+  --moyu-sky: #0e1330;
+  --moyu-violet: #b79cff;
+  --moyu-sheet: rgba(18, 23, 46, 0.80);
+  --moyu-pop: rgba(22, 27, 52, 0.94);
+  --moyu-glass: rgba(40, 48, 92, 0.62);
+  --moyu-glass-soft: rgba(30, 37, 74, 0.42);
+  --moyu-edge: rgba(170, 182, 255, 0.16);
+  --moyu-shine: rgba(255, 255, 255, 0.045);
+  --moyu-shadow: rgba(2, 5, 20, 0.42);
+  --moyu-shadow-soft: rgba(2, 5, 20, 0.24);
+  --moyu-mask: rgba(4, 7, 22, 0.5);
+  --moyu-toast: rgba(86, 98, 190, 0.94);
+  --moyu-quote-a: rgba(101, 112, 183, 0.22);
+  --moyu-quote-b: rgba(103, 82, 148, 0.12);
+  color-scheme: dark;
+}

@@ -25,7 +25,7 @@
     ['fmt.link', '超链接', 'Ctrl+K', 'link'], ['fmt.image', '插入图片…', 'Ctrl+Shift+I', 'image'], ['fmt.uploadAll', '上传所有本地图片', ''], ['fmt.clear', '清除样式', 'Ctrl+\\'],
     ['view.source', '源代码模式', 'Ctrl+/', 'source'], ['view.rich', '纯文本模式', 'F7'], ['view.sidebar', '显示 / 隐藏侧边栏', 'Ctrl+Shift+L'],
     ['view.outline', '大纲', 'Ctrl+Shift+1', 'outline'], ['view.files', '文件树', 'Ctrl+Shift+3'], ['view.focus', '专注模式', 'F8', 'focus'], ['view.typewriter', '打字机模式', 'F9'],
-    ['theme.github', '主题：GitHub', '', 'theme'], ['theme.newsprint', '主题：Newsprint 报刊', '', 'theme'], ['theme.night', '主题：Night 夜间', '', 'theme dark'], ['theme.midnight', '主题：Midnight 午夜蓝', '', 'theme dark'],
+    ['theme.moyu', '主题：墨羽蓝调 · 日间', '', 'theme moyu 蓝'], ['theme.moyu-night', '主题：墨羽蓝调 · 夜间', '', 'theme moyu dark 蓝'], ['theme.moyuToggle', '墨羽蓝调：切换日间 / 夜间', '', 'theme moyu toggle'], ['theme.github', '主题：GitHub', '', 'theme'], ['theme.newsprint', '主题：Newsprint 报刊', '', 'theme'], ['theme.night', '主题：Night 夜间', '', 'theme dark'], ['theme.midnight', '主题：Midnight 午夜蓝', '', 'theme dark'],
     ['help.welcome', '欢迎文档', ''], ['help.syntax', 'Markdown 语法参考', ''], ['help.shortcuts', '快捷键一览', ''], ['help.pluginGuide', '插件开发指南', ''],
     ['help.checkUpdate', '检查更新…', '', 'update upgrade 升级'], ['help.about', '关于 Moyu', ''], ['plugins.manage', '管理插件…', '', 'plugin'], ['plugins.reload', '重新加载插件', '', 'plugin'],
     ['plugins.aiPrompt', '一键提示词：用 AI 生成插件', '', 'ai prompt 插件 tishici'],

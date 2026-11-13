@@ -93,6 +93,7 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
       feature: () => featureTests(),
       rich: () => richTests(),
       tabs: () => require('./tabs-tests.js')(T),
+      theme: () => require('./theme-tests.js')(T),
     };
     if (process.env.MOYU_TEST_ONLY) {
       for (const g of process.env.MOYU_TEST_ONLY.split(',')) await groups[g.trim()]();
@@ -370,6 +371,7 @@ module.exports = function selfTest(win, { ROOT, app, createWindow, getSettings }
     await groups.workspace();
     await groups.export();
     await groups.tabs();
+    await groups.theme();
 
     /* ---------- 偏好设置选项 ---------- */
     await settingsTests();
