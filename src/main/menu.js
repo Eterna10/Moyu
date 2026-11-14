@@ -7,8 +7,7 @@ const THEMES = [
   ['newsprint', 'Newsprint 报刊'],
   ['night', 'Night 夜间'],
   ['midnight', 'Midnight 午夜蓝'],
-  ['moyu', '墨羽蓝调 · 日间'],
-  ['moyu-night', '墨羽蓝调 · 夜间'],
+  ['moyu', '墨羽蓝调'], // 日间 / 夜间由右下角的按钮切换
 ];
 
 const ACCEL_RE = /^((CmdOrCtrl|CommandOrControl|Ctrl|Control|Alt|Option|Shift|Super|Meta|Cmd|Command)\+)*([A-Z0-9]|F([1-9]|1[0-9]|2[0-4])|[=\-[\];',./\\`]|Plus|Space|Tab|Backspace|Delete|Insert|Return|Enter|Up|Down|Left|Right|Home|End|PageUp|PageDown|Escape|Esc)$/i;
@@ -190,7 +189,7 @@ function buildMenu({ settings, send, newWindow, openRecent, clearRecent, plugins
     },
     {
       label: '主题(&T)',
-      submenu: THEMES.map(([id, label]) => c(label, 'theme.' + id, null, { type: 'radio', checked: settings.theme === id })),
+      submenu: THEMES.map(([id, label]) => c(label, 'theme.' + id, null, { type: 'radio', checked: settings.theme === id || (id === 'moyu' && settings.theme === 'moyu-night') })),
     },
     {
       label: '帮助(&H)',

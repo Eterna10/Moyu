@@ -140,7 +140,8 @@ npm run dist    # 打包并生成安装版、便携版与增量更新包（.asar
 - **导出 Word 等格式**：通过 [Pandoc](https://pandoc.org/installing.html)（需另行安装，免费）导出 Word（.docx）、ODT、RTF、EPUB、LaTeX——公式转为 Word 自带的公式，图片嵌入文件。
 
 ### 🎨 主题、背景与字体
-- **外观主题**：内置 GitHub、Newsprint（报刊）、Night（夜间）、Midnight（午夜蓝）等精致主题。
+- **外观主题**：内置 GitHub、Newsprint（报刊）、Night（夜间）、Midnight（午夜蓝）与 **墨羽蓝调** 等精致主题。
+- **墨羽蓝调**：水彩星空背景上悬浮一张毛玻璃书页，配以霞鹜文楷字体；窗口右下角的按钮可在日间与夜间之间一键切换（背景、配色与代码高亮同步过渡），选择主题时会恢复上次使用的外观。
 - **背景图片**：导入任意图片作为背景，支持铺满 / 完整显示 / 平铺与模糊；**自动调整透明度**——根据图片亮度与复杂度计算遮罩浓度，保证文字清晰，切换明暗主题时自动重新计算；侧边栏与状态栏可半透明透出背景。
 - **强调色**：跟随主题、取自背景图片的主色，或自定义颜色；自动按主题明暗调整对比度。
 - **主题包与自定义 CSS**：导出 / 导入 `.moyutheme` 主题包（含背景图片、配色、字体与排版设置），可分享给他人；也可直接导入 CSS 文件或在设置中书写自定义 CSS。
@@ -186,3 +187,5 @@ Moyu/
 ## 许可证
 
 本项目基于 [MIT 许可证](LICENSE) 开源。
+
+「墨羽蓝调」主题附带的 [霞鹜文楷 Lite](https://github.com/lxgw/LxgwWenKai-Lite) 字体以 SIL Open Font License 1.1 授权，许可证见 `src/renderer/assets/themes/moyu/LXGWWenKaiLite-OFL.txt`。

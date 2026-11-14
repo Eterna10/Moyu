@@ -111,6 +111,7 @@ const DEFAULTS = {
   smartPaste: true, // 粘贴网页 / Word 内容时转换为 Markdown
   restoreScroll: true, // 重新打开文件时回到上次的阅读位置
   tabs: true, // 在标签页中打开文档
+  moyuMode: 'moyu', // 「墨羽蓝调」上次使用的是日间（moyu）还是夜间（moyu-night）
   sessionTabs: [], // 上次打开着的文件（用于启动时恢复）
   sessionActive: null,
   docPositions: {},

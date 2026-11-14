@@ -1417,7 +1417,9 @@
     const row = (label, desc, control, cond) =>
       `<div class="row"${cond ? ` data-if="${cond}"` : ''}><label>${label}${desc ? `<small>${desc}</small>` : ''}</label>${control}</div>`;
     const chk = (k, label, tip) => `<label class="pref-check"><input type="checkbox" data-k="${k}"${s[k] ? ' checked' : ''}><span>${label}</span>${tip ? `<span class="pref-tip" title="${esc(tip)}">?</span>` : ''}</label>`;
-    const themes = [['github', 'GitHub'], ['newsprint', 'Newsprint 报刊'], ['night', 'Night 夜间'], ['midnight', 'Midnight 午夜蓝'], ['moyu', '墨羽蓝调 · 日间'], ['moyu-night', '墨羽蓝调 · 夜间']];
+    const themes = [['github', 'GitHub'], ['newsprint', 'Newsprint 报刊'], ['night', 'Night 夜间'], ['midnight', 'Midnight 午夜蓝'], ['moyu', '墨羽蓝调']];
+    // 导出主题需要确定的明暗，因此分开列出
+    const exportThemes = themes.slice(0, 4).concat([['moyu', '墨羽蓝调 · 日间'], ['moyu-night', '墨羽蓝调 · 夜间']]);
     const actions = [
       ['none', '无特殊操作'],
       ['copyToCurrent', '复制图片到当前文件夹 (./)'],
@@ -1464,7 +1466,7 @@
         <section data-pane="appearance">
           <h2>外观</h2>
           <h4 class="pref-h">主题与字体</h4>
-          ${row('主题', '', select('theme', themes))}
+          ${row('主题', '墨羽蓝调可用窗口右下角的按钮切换日间 / 夜间', `<select data-k="theme">${themes.map(([v, l]) => `<option value="${v}"${s.theme === v || (v === 'moyu' && s.theme === 'moyu-night') ? ' selected' : ''}>${l}</option>`).join('')}</select>`)}
           ${row('正文字体', '', select('fontFamily', [['default', '跟随主题'], ['sans', '无衬线（微软雅黑）'], ['serif', '衬线（宋体）'], ['kai', '楷体'], ['mono', '等宽']].concat(fontOpts, [['custom', '系统中的其他字体…']])))}
           ${row('系统字体名称', '输入已安装的字体名称（可从下拉建议中选择），多个用逗号分隔', text('customFont', '例如 "LXGW WenKai", 霞鹜文楷', 'font-input') + '<datalist id="system-fonts"></datalist>', 'fontFamily=custom')}
           ${row('代码字体', '代码块、行内代码与源代码模式', select('codeFont', [['default', '跟随主题']].concat(fontOpts, [['custom', '系统中的其他字体…']])))}
@@ -1590,7 +1592,7 @@
         <section data-pane="export">
           <h2>导出</h2>
           <h4 class="pref-h">通用</h4>
-          ${row('导出使用的主题', '例如在夜间主题下写作，导出为浅色文档', select('exportTheme', [['current', '跟随当前主题']].concat(themes)))}
+          ${row('导出使用的主题', '例如在夜间主题下写作，导出为浅色文档', select('exportTheme', [['current', '跟随当前主题']].concat(exportThemes)))}
           ${row('导出完成后打开文件', '用系统默认程序打开导出的文件', check('openAfterExport'))}
           <h4 class="pref-h">HTML</h4>
           ${row('嵌入本地图片', '图片以 Base64 写入 HTML，得到单个可直接分享的文件', check('exportEmbedImages'))}
@@ -1651,6 +1653,7 @@
         inp.addEventListener(ev, () => {
           let v = inp.type === 'checkbox' ? inp.checked : inp.value;
           if ('num' in inp.dataset) v = Number(v);
+          if (k === 'theme' && v === 'moyu') { runCommand('theme.moyu'); sync(); return; } // 墨羽蓝调：恢复上次的日间 / 夜间
           if (k === 'imageFolder') v = String(v).replace(/[\\/:*?"<>|]/g, '').trim() || 'assets';
           else if (inp.type === 'text') v = String(v).trim();
           const out = $(`[data-v="${k}"]`, el);
@@ -2392,9 +2395,17 @@
       return list;
     },
   };
-  ['github', 'newsprint', 'night', 'midnight', 'moyu', 'moyu-night'].forEach((t) => { COMMANDS['theme.' + t] = () => setSetting({ theme: t }); });
-  // 「墨羽蓝调」的日间 / 夜间切换（右下角的按钮）；当前不是这套主题时切换到它的日间版
-  COMMANDS['theme.moyuToggle'] = () => setSetting({ theme: state.settings.theme === 'moyu' ? 'moyu-night' : 'moyu' });
+  ['github', 'newsprint', 'night', 'midnight'].forEach((t) => { COMMANDS['theme.' + t] = () => setSetting({ theme: t }); });
+  // 「墨羽蓝调」是一套主题，包含日间与夜间两种外观：选择它时恢复上次使用的那一种
+  const MOYU = new Set(['moyu', 'moyu-night']);
+  COMMANDS['theme.moyu'] = () => {
+    if (MOYU.has(state.settings.theme)) return; // 已经在使用：保持当前的日间 / 夜间
+    setSetting({ theme: MOYU.has(state.settings.moyuMode) ? state.settings.moyuMode : 'moyu' });
+  };
+  COMMANDS['theme.moyuDay'] = () => setSetting({ theme: 'moyu', moyuMode: 'moyu' });
+  COMMANDS['theme.moyuNight'] = () => setSetting({ theme: 'moyu-night', moyuMode: 'moyu-night' });
+  // 右下角的按钮：在日间与夜间之间切换，并记住选择
+  COMMANDS['theme.moyuToggle'] = () => runCommand(state.settings.theme === 'moyu' ? 'theme.moyuNight' : 'theme.moyuDay');
 
   function closeModals() { $$('.modal-mask').forEach((m) => m.remove()); }
 

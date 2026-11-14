@@ -92,7 +92,33 @@ module.exports = async function themeTests(t) {
   // 用户自己设置了背景图片时，主题的背景让位
   const custom = await js('(() => { document.body.classList.add("has-bg"); const v = getComputedStyle(document.querySelector("#bg-image")).backgroundImage.includes("bg-day.webp"); document.body.classList.remove("has-bg"); return v; })()');
   check('墨羽蓝调：用户自己设置背景图片时使用用户的图片', custom === false);
-  check('墨羽蓝调：主题出现在菜单命令与偏好设置中', (await js('__zmark.runCommand("theme.moyu-night") === undefined || true')) && (await js('(() => { __zmark.openPreferences("appearance"); const o = Array.from(document.querySelectorAll(".modal select[data-k=theme] option")).map((x) => x.value); document.querySelector(".modal-mask").remove(); return o; })()')).join().includes('moyu,moyu-night'));
+  // 日间与夜间是同一套主题：偏好设置中只有一项，日夜两种外观下都显示为选中
+  await js('document.querySelector("#moyu-mode").click()'); // 切到夜间
+  await wait(300);
+  const pref = await js('(() => { __zmark.openPreferences("appearance"); const sel = document.querySelector(".modal select[data-k=theme]"); const r = { opts: Array.from(sel.options).map((x) => x.textContent), value: sel.value, exp: Array.from(document.querySelectorAll(".modal select[data-k=exportTheme] option")).map((x) => x.value) }; document.querySelector(".modal-mask").remove(); return r; })()');
+  check('墨羽蓝调：主题列表中合并为一项，夜间时也显示为选中', pref.opts.filter((x) => /墨羽蓝调/.test(x)).join() === '墨羽蓝调' && pref.value === 'moyu' && pref.exp.includes('moyu') && pref.exp.includes('moyu-night'), JSON.stringify(pref));
+  // 换到别的主题再选回墨羽蓝调：回到上次的夜间
+  await js('__zmark.runCommand("theme.github")');
+  await wait(200);
+  await js('__zmark.runCommand("theme.moyu")');
+  await wait(300);
+  const menuItems = () => {
+    const { Menu } = require('electron');
+    const m = Menu.getApplicationMenu() || (win.getMenu && win.getMenu());
+    const top = m && m.items.find((x) => /主题/.test(x.label));
+    return top ? top.submenu.items.map((x) => x.label + (x.checked ? '●' : '')) : null;
+  };
+  check('墨羽蓝调：「主题」菜单中只有一项墨羽蓝调，夜间时同样显示为选中', (await (async () => { await js('__zmark.runCommand("theme.moyuNight")'); await wait(400); const l = menuItems(); return !!l && l.filter((x) => /墨羽蓝调/.test(x)).join() === '墨羽蓝调●'; })()), JSON.stringify(menuItems()));
+  await js('__zmark.runCommand("theme.github")');
+  await wait(200);
+  await js('__zmark.runCommand("theme.moyu")');
+  await wait(300);
+  check('墨羽蓝调：从其它主题选回来时恢复上次使用的夜间外观', (await js('document.body.dataset.theme')) === 'moyu-night');
+  await js('__zmark.runCommand("theme.moyu")');
+  await wait(200);
+  check('墨羽蓝调：已在使用时再选一次不会改变日间 / 夜间', (await js('document.body.dataset.theme')) === 'moyu-night');
+  await js('document.querySelector("#moyu-mode").click()'); // 回到日间
+  await wait(300);
   await wait(300);
   await set({ theme: 'github', richMode: false });
   check('墨羽蓝调：切回其它主题后按钮与背景消失', (await btn()).shown === false && (await js('getComputedStyle(document.querySelector("#bg-layer")).display')) === 'none');
